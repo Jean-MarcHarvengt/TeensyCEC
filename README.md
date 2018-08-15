@@ -12,7 +12,7 @@ Can be compiled at 144MHz,180MHz qnd 240 MHz (180MHz is best for all!)
 
 # Minimim requirements:
 - Teensy3.6 board
-- ILIili9341 display
+- ILI9341 display
 - Analog joypad (Arduino or PSP like)
 - 3 buttons (for FIRE, USER1 and RESET)
 - SDFAT library
@@ -22,3 +22,12 @@ Can be compiled at 144MHz,180MHz qnd 240 MHz (180MHz is best for all!)
 - VGA connector according to https://github.com/qix67/uVGA
 - 3 more buttons (for USER2,USER3,USER4)
 - Digital Joystick port (Atari/C64 type)
+
+# Installation
+- Format an SD card as FAT
+- extract the content of SD.zip in the root directory 
+- there must be sub-directories for the roms of each emulator and the default callibration file for the ILI9341 touch screen
+* 2600
+* o2em
+* coleco
+* cal.cfg
