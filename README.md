@@ -2,18 +2,19 @@
 A collection of 80th game console emulators for the Teensy3.6
 
 # Teensy Console Emulators Collection
-Currently 3 consoles supported:
-Atari 2600, Philips Videopac Odyssey and Colecovision.
+Currently 3 game consoles are supported:
+Atari 2600 (teensyvcs), Philips Videopac Odyssey (teensyo2em) and Colecovision(teensycolem).
 
 All emulators support both TFT and VGA display using uVGA library https://github.com/qix67/uVGA
+<br>
 Can be compiled at 144MHz,180MHz qnd 240 MHz (180MHz is best for all!)
 
 
 # Minimim Requirements:
 - Teensy 3.6 board
 - ILIili9341 display
-- Analog joypad (arduino or PSP like)
-- 3 buttons (forFIRE, USER1 and RESET)
+- Analog joypad (Arduino or PSP like)
+- 3 buttons (for FIRE, USER1 and RESET)
 - SDFAT library
 - Audio library 
 
