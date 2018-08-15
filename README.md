@@ -10,7 +10,7 @@ Can be compiled at 144MHz,180MHz qnd 240 MHz (180MHz is best for all!)
 
 
 # Minimim Requirements:
-- Teensy 3.6 biard
+- Teensy 3.6 board
 - ILIili9341 display
 - Analog joypad (arduino or PSP like)
 - 3 buttons (forFIRE, USER1 and RESET)
