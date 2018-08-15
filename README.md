@@ -27,7 +27,11 @@ Can be compiled at 144MHz,180MHz qnd 240 MHz (180MHz is best for all!)
 - Format an SD card as FAT
 - extract the content of SD.zip in the root directory 
 - there must be sub-directories for the roms of each emulator and the default callibration file for the ILI9341 touch screen
-* 2600
-* o2em
-* coleco
-* cal.cfg
+ - 2600
+ - o2em
+ - coleco
+ - cal.cfg
+
+# Compilation
+
+# Running
