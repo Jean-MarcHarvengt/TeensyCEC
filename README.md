@@ -15,8 +15,8 @@ Can be compiled at 144MHz,180MHz qnd 240 MHz (180MHz is best for all!)
 - ILI9341 display
 - Analog joypad (Arduino or PSP like)
 - 3 buttons (for FIRE, USER1 and RESET)
-- SDFAT library
-- Audio library 
+- SDFAT library (https://github.com/greiman/SdFat)
+- Audio library (part of the SDK)
 
 # Optional requirements:
 - VGA connector according to https://github.com/qix67/uVGA
@@ -33,6 +33,25 @@ Can be compiled at 144MHz,180MHz qnd 240 MHz (180MHz is best for all!)
   - cal.cfg
 
 # Compilation
+- Format an SD card as FAT
+
+# Status and known issues
+- teensycolem:
+  - has sound
+  - limited keyboard functionality (not all keys are working)
+- teensyvcs:
+  - no sound yet
+  - limited cartridge siwe
+- teensyo2em:
+  - no sound
+  - some 
+- general:
+  - menu not perfect!
+  - touch screen precision (not sure if calibration works for all)
+  - one joystick supported
+  - few bugs in GFX rendering (disturbance in VGA especially)
+  - Audio library is clashing with the SDFAT library (need to remove SD streaming library from Audio) 
+
 
 # Running
 100. First list item
