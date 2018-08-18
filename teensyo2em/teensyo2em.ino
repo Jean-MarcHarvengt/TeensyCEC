@@ -67,7 +67,6 @@ void vblCount() {
 // ****************************************************
 void setup() {
   tft.begin();
-  tft.flipscreen(true);  
   tft.start();
 
   emu_init(); 

@@ -12,6 +12,7 @@
 #endif
 
 #define DMA_FULL 1
+#define FLIP_SCREEN 1
 
 
 #define RGBVAL32(r,g,b)  ( (r<<16) | (g<<8) | b )

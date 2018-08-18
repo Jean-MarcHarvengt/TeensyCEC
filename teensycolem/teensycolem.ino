@@ -67,8 +67,7 @@ void vblCount() {
 // the setup() method runs once, when the sketch starts
 // ****************************************************
 void setup() {
-  tft.begin();
-  tft.flipscreen(true);  
+  tft.begin(); 
   tft.start();
 
   emu_init(); 

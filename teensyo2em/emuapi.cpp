@@ -261,20 +261,20 @@ int handleCallibration(uint16_t bClick) {
         case 0:
           callibrationStep++;
           tft.drawTextNoDma(0,0, " ", RGBVAL16(0xff,0xff,0xff), RGBVAL16(0xff,0xff,0xff), true);
-          tft.drawTextNoDma(ILI9341_TFTWIDTH-8,0, "+", RGBVAL16(0xff,0x00,0x00), RGBVAL16(0xff,0xff,0xff), true);
+          tft.drawTextNoDma(ILI9341_TFTREALWIDTH-8,0, "+", RGBVAL16(0xff,0x00,0x00), RGBVAL16(0xff,0xff,0xff), true);
           calMinX += xt;
           calMinY += yt;          
           break;
         case 1:
           callibrationStep++;
-          tft.drawTextNoDma(ILI9341_TFTWIDTH-8,0, " ", RGBVAL16(0xff,0xff,0xff), RGBVAL16(0xff,0xff,0xff), true);
-          tft.drawTextNoDma(ILI9341_TFTWIDTH-8,ILI9341_TFTREALHEIGHT-16, "+", RGBVAL16(0xff,0x00,0x00), RGBVAL16(0xff,0xff,0xff), true);
+          tft.drawTextNoDma(ILI9341_TFTREALWIDTH-8,0, " ", RGBVAL16(0xff,0xff,0xff), RGBVAL16(0xff,0xff,0xff), true);
+          tft.drawTextNoDma(ILI9341_TFTREALWIDTH-8,ILI9341_TFTREALHEIGHT-16, "+", RGBVAL16(0xff,0x00,0x00), RGBVAL16(0xff,0xff,0xff), true);
           calMaxX += xt;
           calMinY += yt;           
           break;
         case 2:
           callibrationStep++;
-          tft.drawTextNoDma(ILI9341_TFTWIDTH-8,ILI9341_TFTREALHEIGHT-16, " ", RGBVAL16(0xff,0xff,0xff), RGBVAL16(0xff,0xff,0xff), true);
+          tft.drawTextNoDma(ILI9341_TFTREALWIDTH-8,ILI9341_TFTREALHEIGHT-16, " ", RGBVAL16(0xff,0xff,0xff), RGBVAL16(0xff,0xff,0xff), true);
           tft.drawTextNoDma(0,ILI9341_TFTREALHEIGHT-16, "+", RGBVAL16(0xff,0x00,0x00), RGBVAL16(0xff,0xff,0xff), true);
           calMaxX += xt;
           calMaxY += yt;
@@ -288,8 +288,9 @@ int handleCallibration(uint16_t bClick) {
           calMaxY += yt;       
           break;                 
         case 4:
-          tft.readRaw(&xt,&yt,&zt);
-          if ( (xt > (ILI9341_TFTWIDTH/4)) && (xt < (ILI9341_TFTWIDTH*3)/4) 
+          //Serial.println(xt);
+          //Serial.println(yt);
+          if ( (xt > (ILI9341_TFTREALWIDTH/4)) && (xt < (ILI9341_TFTREALWIDTH*3)/4) 
             && (yt > (ILI9341_TFTREALHEIGHT/4)) && (yt < (ILI9341_TFTREALHEIGHT*3)/4) ) {
             calMinX /= 2;
             calMinY /= 2;
@@ -648,7 +649,6 @@ void toggleVirtualkeyboard(bool keepOn) {
             tft.fillScreenNoDma( RGBVAL16(0x00,0x00,0x00) );
 #ifdef DMA_FULL
             tft.begin();
-            tft.flipscreen(true);
             tft.refresh();
 #endif                        
             //prev_zt = 0; 
@@ -658,8 +658,7 @@ void toggleVirtualkeyboard(bool keepOn) {
         else {
 #ifdef DMA_FULL          
             tft.stop();
-            tft.begin();
-            tft.flipscreen(true);           
+            tft.begin();      
             tft.start();
 #endif                       
             tft.drawSpriteNoDma(0,0,(uint16_t*)logo);           
