@@ -225,6 +225,10 @@ void ILI9341_t3DMA::begin(void) {
   dmatx.triggerAtHardwareEvent(DMAMUX_SOURCE_SPI0_TX );
   dmatx = dmasettings[0];
   cancelled = false; 
+#ifdef FLIP_SCREEN          
+  flipscreen(true);           
+#endif            
+
 };
 
 void ILI9341_t3DMA::flipscreen(bool flip)
