@@ -1,6 +1,6 @@
 # TeensyCEC
 A collection of 80th game console emulators for the Teensy3.6 MCU
-![full1](/images/full1.jpg)(/images/full2.jpg)
+![full1](/images/full1.jpg)![full2](/images/full2.jpg)
 
 
 
@@ -25,6 +25,9 @@ Can be compiled at 144MHz,180MHz qnd 240 MHz (180MHz is best for all!)
 - VGA connector according to https://github.com/qix67/uVGA pinout
 - 3 more buttons (for USER2,USER3,USER4)
 - Digital 9 pins port for external joystick (Atari/C64 like joystick)
+
+# Wiring
+- see pinout.txt file in the project
 
 # Installation
 - Format the SD card as FAT32
