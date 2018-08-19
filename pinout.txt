@@ -1,30 +1,38 @@
 pinout Teensy 3.6 (2x24 pins)
 -----------------------------
 
-            (NC)   GND             VIn  (NC)
-            (NC)    00             Ang  (NC)
-            (NC)    01             3.3v (NC)
-  VGA Blue (OPT)    02           X 23   Key RESET
-            (NC)    03             22   VGA Hsync (OPT)
-            (NC)    04             21   VGA Red (OPT)
-   VGA Red (OPT)    05             20   VGA Red (OPT)
- VGA Green (OPT)    06             19   JOY1 Left (OPT)
- VGA Green (OPT)    07             18   JOY1 Right (OPT)
- VGA Green (OPT)    08             17   JOY1 Down (OPT)
-          ILI DC    09 X           16   JOY1 Up (OPT)
-          ILI CS    10 X           15   (NC)
-ILI SDI-SPI MOSI    11 X           14   VGA Blue (OPT)
-ILI SDO-SPI MISO    12 X         X 13   ILI SCK-SPI SCK
-         ILI VCC  3.3v X         X GND  ILI GND
-            (NC)    24             DAC1 Audio R (OPT)
-            (NC)    25             DAC0 Audio L (OPT)
-            (NC)    26             39   Key USER4 (OPT)
-            (NC)    27           X 38   ILI T_CS (Touch screen)
-            (NC)    28           X 37   ILI T_IRQ (Touch screen)
- VGA Vsync (OPT)    29             36   JOY2 Fire 
-JOY1 Key FIRE(OPT)  30           X 35   Key USER1 
-JOY2 AnalogX-A12    31 X           34   Key USER2 (OPT)
-JOY2 AnalogY-A13    32 X           33   Key USER3 (OPT)
+            (NC)      GND             VIn  (NC)
+            (NC)       00             Ang  (NC)
+            (NC)       01             3.3v (NC)
+  VGA Blue (OPT)       02           X 23   Key RESET
+            (NC)       03             22   VGA Hsync (OPT)
+            (NC)       04             21   VGA Red (OPT)
+   VGA Red (OPT)       05             20   VGA Red (OPT)
+ VGA Green (OPT)       06             19   JOY1 Left (OPT)
+ VGA Green (OPT)       07             18   JOY1 Right (OPT)
+ VGA Green (OPT)       08             17   JOY1 Down (OPT)
+          ILI DC       09 X           16   JOY1 Up (OPT)
+          ILI CS       10 X           15   (NC)
+ILI SDI+T_DIN-SPI MOSI 11 X           14   VGA Blue (OPT)
+ILI SDO+T_DO-SPI MISO  12 X         X 13   ILI SCK+T_CLK-SPI SCK
+         ILI VCC     3.3v X         X GND  ILI GND
+            (NC)       24             DAC1 Audio R (OPT)
+            (NC)       25             DAC0 Audio L (OPT)
+            (NC)       26             39   Key USER4 (OPT)
+            (NC)       27           X 38   ILI T_CS (Touch screen)
+            (NC)       28           X 37   ILI T_IRQ (Touch screen)
+ VGA Vsync (OPT)       29             36   JOY2 Fire 
+JOY1 Key FIRE(OPT)     30           X 35   Key USER1 
+JOY2 AnalogX-A12       31 X           34   Key USER2 (OPT)
+JOY2 AnalogY-A13       32 X           33   Key USER3 (OPT)
 
 
+(X)   mandatory pins to connect for the minimum set-up
+(OPT) extra connections for VGA out, extra keys, audio and the external joystick support
 
+The keys (all) are using internal pullup so just connect the other side to the GND
+The Analog joypad also needs VCC and GND connections !
+The Touch part of the ILI: T_DIN,T_DO,T_CLK,T_CS (SPI) but also T_IRQ must be connected
+The Display part of the ILI: SDI,SDO,SCK,CS but also DC,VCC and GND must be connected
+
+Everything is powered ofver the USB connector of the Teensy!
