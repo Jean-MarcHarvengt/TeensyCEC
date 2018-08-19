@@ -1,5 +1,8 @@
 # TeensyCEC
 A collection of 80th game console emulators for the Teensy3.6 MCU
+![full1](/images/full1.jpg)
+
+
 
 # Teensy Console Emulators Collection
 Currently 3 game consoles are supported:
