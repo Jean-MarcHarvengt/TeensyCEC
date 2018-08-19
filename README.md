@@ -58,15 +58,15 @@ Can be compiled at 144MHz,180MHz qnd 240 MHz (180MHz is best for all!)
 # Running
 - download the compiled project from the SDK (only one emulator at a time is supported!)
 - you should see the roms you copied on the SD being listed
-- if you touch the creen while rebooting the teensy, you enter the callibration mode:
-  - follow the instructions and click the cross at each corner untill the procedure ends
-  - then the menu will be displayed again
-- you can select the rom with up/down or via the touch screen
+- if you touch the screen while rebooting the teensy, you enter the callibration mode:
+  - follow the instructions and click the red cross at each corner untill the procedure ends
+  - then the menu will be displayed again...
+- you can select the rom with up/down or via the touch screen or the touch arrows at the left
 - you can start the game in TFT mode by pressing the FIRE key or clicking the TFT icon at the right
 - you can start the game in VGA mode by pressing the USER1 key or clicking the VGA icon at the right
-- while the game is running, clicking the touch screen will show up the emulator keyboard/keypad for more interaction.
+- while the game is running, clicking the touch screen will show up the emulator's keyboard/keypad for more interaction.
   - you can just click on the on screen key to perform the corresponding action,it will leave the keyboard also
   - e.g. coleco games typically requires a digit to be pressed
-- You can then play the game with the the joystick and the FIRE or USER1 keys  
-- press thr RESET key to reboot and load another ROM
-- while the menu is shown you can also swap the joystick and use an external joystick if it was wired.
+- You can then play the game with the analog joystick and the FIRE/USER1 keys  
+- press the RESET key to reboot the emulator and load another ROM
+- while the menu is shown at startup you can also swap the joysticks and use the external one if it was wired.
