@@ -80,3 +80,7 @@ Can be compiled at 144MHz,180MHz qnd 240 MHz (180MHz is best for all!)
 - You can then play the game with the analog joystick and the FIRE/USER1 keys  
 - press the RESET key to reboot the emulator and load another ROM
 - while the menu is shown at startup you can also swap the joysticks and use the external one if it was wired.
+
+# Credits
+I mostly ported the emulators from existing projects, all the credit goes to the authors of
+colem, o2em and x2600 projects!
