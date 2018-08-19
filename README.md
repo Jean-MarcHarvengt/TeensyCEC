@@ -12,7 +12,7 @@ Can be compiled at 144MHz,180MHz qnd 240 MHz (180MHz is best for all!)
 
 # Minimim requirements:
 - Teensy3.6 board
-- ILI9341 display with touch screen (I use the 2.8 iches)
+- ILI9341 display with touch screen (I use the 2.8 inches version)
 - Analog joypad (Arduino or PSP like)
 - 3 buttons (FIRE, USER1 and RESET)
 - SDFAT library (https://github.com/greiman/SdFat)
