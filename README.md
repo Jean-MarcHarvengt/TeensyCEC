@@ -1,9 +1,9 @@
 # TeensyCEC
 A collection of 80th game console emulators for the Teensy3.6 MCU
 <p float="left">
-  <img src="/images/full1.jpg" width="300" />
-  <img src="/images/full2.jpg" width="300" />
-  <img src="/images/minimal.jpg" width="300" /> 
+  <img src="/images/full1.jpg" width="400" />
+  <img src="/images/full2.jpg" width="400" />
+  <img src="/images/minimal.jpg" width="400" /> 
 </p>
 
 
