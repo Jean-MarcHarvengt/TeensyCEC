@@ -84,3 +84,5 @@ Can be compiled at 144MHz,180MHz qnd 240 MHz (180MHz is best for all!)
 # Credits
 I mostly ported the emulators from existing projects, all the credit goes to the authors of
 colem, o2em and x2600 projects!
+Thanks a lot also to Frank Boesing for his ILI DMA library from which I started from and his great Teensy64 project https://github.com/FrankBoesing/Teensy64
+
