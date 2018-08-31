@@ -48,9 +48,6 @@ extern struct map4_s *map4;
 
 extern uint8_t * outputNES;
 
-static uint8_t joypad_bits[2];  // Joypad shift registers.
-static bool strobe=false;       // Joypad strobe latch.
-
 static uint8_t m_strobe;       // Joypad strobe latch.
 static unsigned int m_keyStates;
 
@@ -190,7 +187,7 @@ void execframe(bool skiprender) {
 
     if (skiprender == false) {
       renderscanline(scanline);
-      emu_DrawLine(outputNES, 256, 1, scanline);      
+      emu_DrawLine(outputNES, 256, 240, scanline);      
     }
 
 		if (PPU->bgvisible) PPU->addr = (PPU->addr & 0xFBE0) | (PPU->tempaddr & 0x041F);
