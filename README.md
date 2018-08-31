@@ -20,7 +20,7 @@ Can be compiled at 144MHz,180MHz qnd 240 MHz (180MHz is best for all!), only
 NES requires 240Mhz for better performances.
 
 
-# Minimim requirements:
+# Minimalrequirements:
 - Teensy3.6 board
 - ILI9341 display with touch screen (I use the 2.8 inches version)
 - Analog joypad (Arduino or PSP like)
