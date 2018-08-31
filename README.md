@@ -44,7 +44,7 @@ NES requires 240Mhz for better performances.
   - "o2em" => for teenso2em, put your Videopac/Odysssey roms here (.bin)
   - "coleco" => for teensycolem, put your Colecovision roms here (.rom, including coleco.rom)
   - "nes" => for teensynes, put your .nes files here, onlt 32k games are supported (galaga,xevious,mario1...)
-  - "spec" => for teensyspeccy, put your ".z80" file here ( max 48K games so typicall smaller z80 images)
+  - "spec" => for teensyspeccy, put your ".z80" file here ( max 48K games so typically smaller z80 images)
   - "cal.cfg"  
 - insert the microSD in the teensy
 
@@ -52,12 +52,11 @@ NES requires 240Mhz for better performances.
 - Install SDFAT abd uVGA libraries for the Teensy (see links above)
 - Because the standard Audio library is clashing with the SDFAT library, you need to remove SD streaming from the Audio library 
   - locate play_sd_raw*,play_sd_wav* and play_serialflash_raw* and move them inside a backup directory
-- load the emulator's ino file in the IDE and compile for 180MHz
+- load the emulator's ino file in the IDE and compile for 180MHz (or whatever best frequency)
 
 # Status and known issues
 - teensycolem:
-  - limited keyboard functionality (not all keys are working)
-  - but has sound!
+  - has sound!
 - teensyvcs:
   - no sound yet
   - limited cartridge size support (due to ram constraint)
@@ -71,20 +70,20 @@ NES requires 240Mhz for better performances.
 - teensyspeccy:
   - no sound
   - 48k games only supported
-  - kempston joystick supported byt sometimes on screen keyboard does not answer
+  - kempston joystick supported but on screen keyboard may not answer in some games
   
 - general:
   - menu not perfect!
-  - touch screen precision To be checked (not sure if calibration works for all)
+  - touch screen precision to be checked (not sure if calibration works for all)
   - one joystick supported only
   - few bugs in GFX rendering (disturbance in VGA especially)
 
 # Running
-- download the compiled project from the SDK (only one emulator at a time is supported!)
+- download the compiled project to the teensy from the SDK (only one emulator at a time is supported!)
 - you should see the roms you copied on the SD being listed
 - if you touch the screen while rebooting the teensy, you enter the callibration mode:
-  - follow the instructions and click the red cross at each corner untill the procedure ends
-  - then the menu will be displayed again...
+  - follow the instructions and click the red cross at each corner untill the procedure is finished
+  - then touch the center and the menu will be displayed again...
 - you can select the rom with up/down or via the touch screen or the touch arrows at the left
 - you can start the game in TFT mode by pressing the FIRE key or clicking the TFT icon at the right
 - you can start the game in VGA mode by pressing the USER1 key or clicking the VGA icon at the right
