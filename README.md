@@ -16,7 +16,7 @@ Zx Spectrum (teensyspeccy)
 
 All emulators support both ILI9341 TFT and VGA output using the uVGA library https://github.com/qix67/uVGA
 <br>
-Can be compiled at 144MHz,180MHz qnd 240 MHz (180MHz is best for all!)
+Can be compiled at 144MHz,180MHz qnd 240 MHz (180MHz is best for all!), only
 NES requires 240Mhz for better performances.
 
 
