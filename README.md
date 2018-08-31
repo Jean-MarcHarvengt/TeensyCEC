@@ -10,7 +10,7 @@ A collection of 80th game console emulators for the Teensy3.6 MCU
 
 # Teensy Console Emulators Collection
 4 game consoles are currently supported:
-Atari2600 (teensyvcs), Philips Videopac/Odyssey (teensyo2em), Colecovision (teensycolem) and NES (teensynes).
+Atari2600 (teensyvcs), Philips Videopac/Odyssey (teensyo2em), Colecovision (teensycolem) and NES (teensynes).<br>
 1 computer core supported:
 Zx Spectrum (teensyspeccy)
 
