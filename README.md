@@ -9,8 +9,10 @@ A collection of 80th game console emulators for the Teensy3.6 MCU
 
 
 # Teensy Console Emulators Collection
-Currently 4 game consoles are supported:
+4 game consoles are currently supported:
 Atari2600 (teensyvcs), Philips Videopac/Odyssey (teensyo2em), Colecovision (teensycolem) and NES (teensynes).
+1 computer core supported:
+Zx Spectrum (teensyspeccy)
 
 All emulators support both ILI9341 TFT and VGA output using the uVGA library https://github.com/qix67/uVGA
 <br>
@@ -42,7 +44,8 @@ NES requires 240Mhz for better performances.
   - "o2em" => for teenso2em, put your Videopac/Odysssey roms here (.bin)
   - "coleco" => for teensycolem, put your Colecovision roms here (.rom, including coleco.rom)
   - "nes" => for teensynes, put your .nes files here, onlt 32k games are supported (galaga,xevious,mario1...)
-  - "cal.cfg"
+  - "spec" => for teensyspeccy, put your ".z80" file here ( max 48K games so typicall smaller z80 images)
+  - "cal.cfg"  
 - insert the microSD in the teensy
 
 # Compilation
@@ -65,6 +68,10 @@ NES requires 240Mhz for better performances.
   - no sound
   - 32k roms only supported
   - needs a little bit of speedup but playable...
+- teensyspeccy:
+  - no sound
+  - 48k games only supported
+  - kempston joystick supported byt sometimes on screen keyboard does not answer
   
 - general:
   - menu not perfect!
@@ -90,6 +97,6 @@ NES requires 240Mhz for better performances.
 
 # Credits
 I mostly ported the emulators from existing projects, all the credit goes to the authors of
-colem, o2em , x2600 qnd moarnes projects!
+colem, o2em , x2600, moarnes and mc-4u projects!
 Thanks a lot also to Frank Boesing for his ILI DMA library from which I started from and his great Teensy64 project https://github.com/FrankBoesing/Teensy64
 
