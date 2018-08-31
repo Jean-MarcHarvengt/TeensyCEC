@@ -7,7 +7,8 @@ extern "C" {
 #include "ili9341_t3dma.h"
 
 extern "C" {
-#include "moarnes.h"
+#include "spec.h"
+
 }
 
 #include <uVGA.h>
@@ -71,11 +72,6 @@ void vblCount() {
 
 
 
-void fatalerr(char *errmsg) {
-  Serial.println(errmsg);
-}
-
-
 
 // ****************************************************
 // the setup() method runs once, when the sketch starts
@@ -87,7 +83,7 @@ void setup() {
 
   emu_init();  
   
-  //myTimer.begin(vblCount, 20000);  //to run every 20ms
+  myTimer.begin(vblCount, 15000);  //to run every 15ms
 }
 
 
@@ -152,7 +148,7 @@ void loop() {
   else {
     handleVirtualkeyboard();
     if ( (!virtualkeyboardIsActive()) || (vgaMode) ) {     
-      emu_Step((skip==0)?false:true);
+      emu_Step();
     }
   }
 }
@@ -176,11 +172,11 @@ void emu_DrawVsync(void)
   skip += 1;
   skip &= VID_FRAME_SKIP;
   if (!vgaMode) {
-    //while (vbl==vb) {};
+    while (vbl==vb) {};
   }
   else {
     //Serial.println("r");
-    //while (vbl==vb) {};
+    while (vbl==vb) {};
   }
 }
 
