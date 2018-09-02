@@ -11,6 +11,9 @@ extern "C" {
 #include "bmpvga.h"
 #include "bmptft.h"
 #include <SdFat.h>
+#ifdef HAS_I2CKBD
+#include <i2c_t3.h>
+#endif
 
 extern ILI9341_t3DMA tft;
 static SdFatSdio sd;
@@ -422,6 +425,10 @@ char * menuSelection(void)
 
 void emu_init(void)
 {
+#ifdef HAS_I2CKBD
+  Wire2.begin(); // join i2c bus SDA2/SCL2
+#endif
+
   Serial.begin(9600);
   //while (!Serial) {}
 
@@ -635,6 +642,44 @@ int emu_ReadKeys(void)
   return (retval);
 }
 
+
+int emu_ReadI2CKeyboard(void) {
+  int retval=0;
+#ifdef HAS_I2CKBD
+  byte msg[5];
+  Wire2.requestFrom(8, 5);    // request 5 bytes from slave device #8 
+  int i = 0;
+  int hitindex=-1;
+  while (Wire2.available() && (i<5) ) { // slave may send less than requested
+    byte b = Wire2.read(); // receive a byte
+    if (b != 0xff) hitindex=i; 
+    msg[i++] = b;        
+  }
+
+  if (hitindex >=0 ) {
+    /*
+    Serial.println(msg[0], BIN);
+    Serial.println(msg[1], BIN);
+    Serial.println(msg[2], BIN);
+    Serial.println(msg[3], BIN);
+    Serial.println(msg[4], BIN);
+    Serial.println("");
+    Serial.println("");
+    Serial.println("");
+    */
+    unsigned short match = (~msg[hitindex])&0x00FF | (hitindex<<8);
+    //Serial.println(match,HEX);  
+    for (i=0; i<sizeof(i2ckeys); i++) {
+      if (match == i2ckeys[i]) {
+        //Serial.println((int)keys[i]);      
+        return (keys[i]);
+      }
+    }
+  }
+
+#endif
+  return(retval);
+}
 
 void emu_InitJoysticks(void) {    
   pinMode(PIN_JOY1_1, INPUT_PULLUP);
