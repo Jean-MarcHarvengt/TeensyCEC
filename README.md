@@ -71,6 +71,7 @@ NES requires 240Mhz for better performances.
   - no sound
   - 48k games only supported
   - kempston joystick supported but on screen keyboard may not answer in some games
+  - I2C custom keyboard support!
   
 - general:
   - menu not perfect!
