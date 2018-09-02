@@ -27,11 +27,13 @@ NES requires 240Mhz for better performances.
 - 3 buttons (FIRE, USER1 and RESET)
 - SDFAT library (https://github.com/greiman/SdFat)
 - Audio library (part of the SDK)
+- Optionnaly: i2c_t3 library https://github.com/nox771/i2c_t3
 
 # Optional requirements:
 - VGA connector according to https://github.com/qix67/uVGA pinout
 - 3 more buttons (for USER2,USER3,USER4)
 - Digital 9 pins port for external joystick (Atari/C64 like joystick)
+- I2C custom keyboard usin i2c_t3 library 
 
 # Wiring
 - see pinout.txt file in the project
