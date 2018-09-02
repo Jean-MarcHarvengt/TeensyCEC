@@ -125,17 +125,17 @@ static void UpdateKeyboard (void)
 {
   int nb_keys=0;
   int k = emu_GetPad();
-  if (k == 0) {
+  int hk = emu_ReadI2CKeyboard();  
+  if ( (k == 0) && (hk == 0) )  {
     memset(key_ram, 0xff, sizeof(key_ram));    
   }
   else {
     // scan all possibilities
     for (int j=0;j<8;j++) {
       for(int i=0;i<5;i++){
-        if (k == map_qw[j][i]) {
+        if ( (k == map_qw[j][i]) || (hk == map_qw[j][i]) ) {
             key_ram[j] &= ~ (1<<(4-i));
             nb_keys++;
-            emu_printf("key");
         }   
       }  
     }    

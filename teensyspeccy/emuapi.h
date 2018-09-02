@@ -1,7 +1,8 @@
 #ifndef EMUAPI_H
 #define EMUAPI_H
 
-#define HAS_SND 0
+//#define HAS_SND    1
+#define HAS_I2CKBD 1
 
 // Title:     <                                        >
 #define TITLE "          SPECTRUM Emulator             "
@@ -57,11 +58,20 @@ const unsigned short keysw[] = {
 */
    
 const unsigned char keys[] = {
-  13,31,32,33,34,35,36,37,38,39,
+  30,31,32,33,34,35,36,37,38,39,
   0, 20,26, 8,21,23,28,25,12,18,19,
   0,  4, 9, 7,22, 4,11,13,14,15,40,
   25, 6,27,29,224,5,17,16,225,44 
   };  
+
+#ifdef HAS_I2CKBD
+const unsigned short i2ckeys[] = {
+     0X0080,0X0008,0X0180,0X0108,0X0280,0X0208,0X0380,0X0308,0X0480,0X0408,
+  0, 0X0040,0X0004,0X0140,0X0104,0X0240,0X0204,0X0340,0X0304,0X0440,0X0404,
+  0, 0X0020,0X0002,0X0120,0X0102,0X0220,0X0202,0X0320,0X0302,0X0420,0X0402,
+     0X0010,0X0001,0X0110,0X0101,0X0210,0X0201,0X0310,0X0301,0X0410,0X0401,
+  };
+#endif
    
 #endif
 
@@ -112,7 +122,7 @@ extern int emu_SwapJoysticks(int statusOnly);
 extern unsigned short emu_DebounceLocalKeys(void);
 extern int emu_ReadKeys(void);
 extern int emu_GetPad(void);
-
+extern int emu_ReadI2CKeyboard(void);
 extern void emu_sndPlaySound(int chan, int volume, int freq);
 extern void emu_sndInit();
 
