@@ -1,10 +1,10 @@
-
 extern "C" {
   #include "emuapi.h"
 }
 
 #include "keyboard_osd.h"
 #include "ili9341_t3dma.h"
+#include <elapsedMillis.h>
 
 extern "C" {
 #include "spec.h"
@@ -61,6 +61,7 @@ static unsigned short palette16[PALETTE_SIZE];
 static IntervalTimer myTimer;
 volatile boolean vbl=true;
 static int skip=0;
+static elapsedMicros tius;
 
 void vblCount() { 
   if (vbl) {
@@ -83,75 +84,9 @@ void setup() {
 
   emu_init();  
   
-  myTimer.begin(vblCount, 15000);  //to run every 15ms
+  myTimer.begin(vblCount, 20000);  //to run every 20ms
 }
 
-
-// ****************************************************
-// the loop() method runs continuously
-// ****************************************************
-
-void loop() {
-  uint16_t bClick = emu_DebounceLocalKeys();
-  
-  // Global key handling
-  if (bClick & MASK_KEY_USER1) {  
-    emu_printf((char*)"user1");
-  }
-  if (bClick & MASK_KEY_USER2) {  
-    emu_printf((char*)"user2");
-  }
-  if (bClick & MASK_KEY_USER3) {  
-    emu_printf((char*)"user3");
-  }
-  if (bClick & MASK_KEY_USER4) {  
-    emu_printf((char*)"user4");
-    emu_SwapJoysticks(0);    
-  }  
-  if (bClick & MASK_KEY_ESCAPE) {  
-    emu_printf((char*)"esc");
-    *(volatile uint32_t *)0xE000ED0C = 0x5FA0004;
-    while (true) {
-      ;
-    }    
-  }
-     
-  if (menuActive()) {
-    int action = handleMenu(bClick);
-    char * filename = menuSelection();
-    if ( (bClick & MASK_JOY2_BTN) || (action == ACTION_RUNTFT) ) {
-      toggleMenu(false);
-      vgaMode = false;   
-      tft.fillScreenNoDma( RGBVAL16(0x00,0x00,0x00) );
-      tft.refresh();
-      emu_Init(filename);
-    }
-    else if ( (bClick & MASK_KEY_USER1)|| (action == ACTION_RUNVGA) )  {
-      toggleMenu(false);
-      vgaMode = true;
-      emu_Init(filename);       
-      uvga.set_static_framebuffer(VGA_frame_buffer);
-      int retvga = uvga.begin(&modeline);
-      Serial.println(retvga);      
-      uvga.clear(0x00);
-      //tft.start();
-      tft.fillScreenNoDma( RGBVAL16(0x00,0x00,0x00) );
-      // In VGA mode, we show the keyboard on TFT
-      toggleVirtualkeyboard(true); // keepOn
-      Serial.println("Starting");              
-    }         
-    delay(20);
-  }
-  else if (callibrationActive()) {
-    handleCallibration(bClick);
-  } 
-  else {
-    handleVirtualkeyboard();
-    if ( (!virtualkeyboardIsActive()) || (vgaMode) ) {     
-      emu_Step();
-    }
-  }
-}
 
 
 
@@ -229,69 +164,122 @@ void emu_DrawScreen(unsigned char * VBuf, int width, int height, int stride)
 }
 
 
+void emu_resetus(void) {
+  tius=0;  
+}
+
+int emu_us(void)  {
+  return (tius);
+}
+
+
+
+// ****************************************************
+// the loop() method runs continuously
+// ****************************************************
+
+void loop() {
+  uint16_t bClick = emu_DebounceLocalKeys();
+  
+  // Global key handling
+  if (bClick & MASK_KEY_USER1) {  
+    emu_printf((char*)"user1");
+  }
+  if (bClick & MASK_KEY_USER2) {  
+    emu_printf((char*)"user2");
+  }
+  if (bClick & MASK_KEY_USER3) {  
+    emu_printf((char*)"user3");
+  }
+  if (bClick & MASK_KEY_USER4) {  
+    emu_printf((char*)"user4");
+    emu_SwapJoysticks(0);    
+  }  
+  if (bClick & MASK_KEY_ESCAPE) {  
+    emu_printf((char*)"esc");
+    *(volatile uint32_t *)0xE000ED0C = 0x5FA0004;
+    while (true) {
+      ;
+    }    
+  }
+     
+  if (menuActive()) {
+    int action = handleMenu(bClick);
+    char * filename = menuSelection();
+    if ( (bClick & MASK_JOY2_BTN) || (action == ACTION_RUNTFT) ) {
+      toggleMenu(false);
+      vgaMode = false;   
+      tft.fillScreenNoDma( RGBVAL16(0x00,0x00,0x00) );
+      tft.refresh();
+      emu_Init(filename);
+    }
+    else if ( (bClick & MASK_KEY_USER1)|| (action == ACTION_RUNVGA) )  {
+      toggleMenu(false);
+      vgaMode = true;
+      emu_Init(filename);       
+      uvga.set_static_framebuffer(VGA_frame_buffer);
+      int retvga = uvga.begin(&modeline);
+      Serial.println(retvga);      
+      uvga.clear(0x00);
+      //tft.start();
+      tft.fillScreenNoDma( RGBVAL16(0x00,0x00,0x00) );
+      // In VGA mode, we show the keyboard on TFT
+      toggleVirtualkeyboard(true); // keepOn
+      Serial.println("Starting");              
+    }         
+    delay(20);
+  }
+  else if (callibrationActive()) {
+    handleCallibration(bClick);
+  } 
+  else {
+    handleVirtualkeyboard();
+    if ( (!virtualkeyboardIsActive()) || (vgaMode) ) {     
+      emu_Step();
+      //mymixer.step();
+    }
+  }
+}
 
 #ifdef HAS_SND
 
 #include <Audio.h>
+#include "AudioPlaySystem.h"
 
-AudioSynthWaveform waveform1;
-AudioSynthWaveform waveform2;
-AudioSynthWaveform waveform3;
-AudioSynthNoiseWhite waveform4;
-AudioMixer4 mixer1;
-AudioConnection patchCord17(waveform1, 0, mixer1, 0);
-AudioConnection patchCord18(waveform2, 0, mixer1, 1);
-AudioConnection patchCord19(waveform3, 0, mixer1, 2);
-AudioConnection patchCord20(waveform4, 0, mixer1, 3);
-AudioOutputAnalog        dac0;
-AudioConnection          patchCord1(mixer1, dac0);
-
-boolean sndinit=false;
-
-void emu_sndPlaySound(int chan, int volume, int freq)
-{
-  if (!sndinit) {
-    emu_sndInit();
-    sndinit=true;
-  }
-  double vol = (1.0*volume)/256.0;
-  //Serial.print(chan);
-  //Serial.print(":" );  
-  //Serial.println(freq);  
-  switch (chan) {
-    case 0:
-      waveform1.amplitude(vol);
-      waveform1.frequency(freq);
-      break;
-    case 1:
-      waveform2.amplitude(vol);
-      waveform2.frequency(freq);
-      break;
-    case 2:
-      waveform3.amplitude(vol);
-      waveform3.frequency(freq);
-      break;
-    case 3:
-      waveform4.amplitude(vol);
-      //waveform4.frequency(freq);
-      break;
-      
-  }
-}
+AudioPlaySystem mymixer;
+AudioOutputAnalog dac1;
+AudioConnection   patchCord1(mymixer, dac1);
 
 void emu_sndInit() {
   Serial.println("sound init");  
 
-  AudioMemory(2);
-  int current_waveform = WAVEFORM_SQUARE;
-  waveform1.begin(current_waveform);
-  waveform2.begin(current_waveform);
-  waveform3.begin(current_waveform);
-  //waveform4.begin(current_waveform);
+  AudioMemory(16);
+  mymixer.start();
+}
+
+void emu_sndPlaySound(int chan, int volume, int freq)
+{
+  if (chan < 6) {
+    mymixer.sound(chan, freq, volume); 
+  }
+  
+  /*
+  Serial.print(chan);
+  Serial.print(":" );  
+  Serial.print(volume);  
+  Serial.print(":" );  
+  Serial.println(freq); 
+  */ 
+}
+
+void emu_sndPlayBuzz(int size, int val) {
+  mymixer.buzz(size,val); 
+  //Serial.print((val==1)?1:0); 
+  //Serial.print(":"); 
+  //Serial.println(size); 
 }
 
 #endif
-
 
 
 

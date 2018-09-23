@@ -472,8 +472,9 @@ static void CodesFD(register Z80 *R)
 /** before starting execution with Z80(). It sets the       **/
 /** registers to their supposed initial values.             **/
 /*************************************************************/
-void ResetZ80(Z80 *R)
+void ResetZ80(Z80 *R, register int Cycles)
 {
+  R->IPeriod  = Cycles;
   R->PC.W     = 0x0000;
   R->SP.W     = 0xF000;
   R->AF.W     = 0x0000;

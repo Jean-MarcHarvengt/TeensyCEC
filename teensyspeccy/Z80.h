@@ -108,7 +108,7 @@ typedef struct
 /** starting execution with RunZ80(). It sets registers to  **/
 /** their initial values.                                   **/
 /*************************************************************/
-void ResetZ80(register Z80 *R);
+void ResetZ80(register Z80 *R, register int Cycles);
 
 /** ExecZ80() ************************************************/
 /** This function will execute given number of Z80 cycles.  **/

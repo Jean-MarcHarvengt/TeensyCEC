@@ -1,8 +1,9 @@
 #ifndef EMUAPI_H
 #define EMUAPI_H
 
-//#define HAS_SND    1
-#define HAS_I2CKBD 1
+#define HAS_SND     1
+#define HAS_I2CKBD  1
+//#define ALT_Z80CORE 1
 
 // Title:     <                                        >
 #define TITLE "          SPECTRUM Emulator             "
@@ -107,9 +108,13 @@ const unsigned short i2ckeys[] = {
 
 extern void emu_init(void);
 extern void emu_printf(char * text);
+extern void emu_printi(int val);
 extern void * emu_Malloc(int size);
 extern void emu_Free(void * pt);
 
+extern int emu_FileOpen(char * filename);
+extern int emu_FileRead(char * buf, int size);
+extern void emu_FileClose(void);
 extern int emu_LoadFile(char * filename, char * buf, int size);
 extern int emu_LoadFileSeek(char * filename, char * buf, int size, int seek);
 extern void emu_SetPaletteEntry(unsigned char r, unsigned char g, unsigned char b, int index);
@@ -124,7 +129,11 @@ extern int emu_ReadKeys(void);
 extern int emu_GetPad(void);
 extern int emu_ReadI2CKeyboard(void);
 extern void emu_sndPlaySound(int chan, int volume, int freq);
+extern void emu_sndPlayBuzz(int size, int val);
 extern void emu_sndInit();
+extern void emu_resetus(void);
+extern int emu_us(void);
+
 
 #endif
 

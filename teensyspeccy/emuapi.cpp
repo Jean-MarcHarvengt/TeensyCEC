@@ -19,6 +19,7 @@ extern ILI9341_t3DMA tft;
 static SdFatSdio sd;
 static File file;
 static int16_t calMinX=-1,calMinY=-1,calMaxX=-1,calMaxY=-1;
+static bool i2cKeyboardPresent = false;
 
 #define CALIBRATION_FILE    "/cal.cfg"
 
@@ -425,11 +426,7 @@ char * menuSelection(void)
 
 void emu_init(void)
 {
-#ifdef HAS_I2CKBD
-  Wire2.begin(); // join i2c bus SDA2/SCL2
-#endif
-
-  Serial.begin(9600);
+  Serial.begin(115200);
   //while (!Serial) {}
 
   if (!sd.begin()) {
@@ -448,7 +445,16 @@ void emu_init(void)
   } else  {
     toggleMenu(true);
   }
- 
+
+#ifdef HAS_I2CKBD
+  Wire2.begin(); // join i2c bus SDA2/SCL2
+  Wire2.setDefaultTimeout(200000); // 200ms  
+  Wire2.requestFrom(8, 5);
+  if(!Wire2.getError()) {
+    i2cKeyboardPresent = true;
+    emu_printf("i2C keyboard found");    
+  }  
+#endif 
 }
 
 
@@ -458,6 +464,11 @@ void emu_printf(char * text)
 }
 
 void emu_printf(int val)
+{
+  Serial.println(val);
+}
+
+void emu_printi(int val)
 {
   Serial.println(val);
 }
@@ -480,6 +491,35 @@ void * emu_Malloc(int size)
 void emu_Free(void * pt)
 {
   free(pt);
+}
+
+
+
+int emu_FileOpen(char * filename)
+{
+  int retval = 0;
+  String filepath = String(ROMSDIR) + String("/") + String(filename);
+  if (file.open(filepath.c_str(), O_READ)) {
+    retval = 1;  
+  }
+  else {
+    emu_printf("FileOpen failed");
+  }
+  return (retval);
+}
+
+int emu_FileRead(char * buf, int size)
+{
+  int retval = file.read(buf, size);
+  if (retval != size) {
+    emu_printf("FileRead failed");
+  }
+  return (retval);     
+}
+
+void emu_FileClose(void)
+{
+  file.close();  
 }
 
 int emu_LoadFile(char * filename, char * buf, int size)
@@ -515,16 +555,10 @@ int emu_LoadFileSeek(char * filename, char * buf, int size, int seek)
   if (file.open(filepath.c_str(), O_READ)) 
   {
     file.seek(seek);
-    //filesize = file.fileSize(); 
-    //emu_printf(filesize);
     emu_printf(size);
-    //emu_printf(seek);
-    //if (size >= filesize)
-    //{
-      if (file.read(buf, size) != size) {
-        emu_printf("File read failed");
-      }        
-    //}
+    if (file.read(buf, size) != size) {
+      emu_printf("File read failed");
+    }        
     file.close();
   }
   
@@ -646,37 +680,38 @@ int emu_ReadKeys(void)
 int emu_ReadI2CKeyboard(void) {
   int retval=0;
 #ifdef HAS_I2CKBD
-  byte msg[5];
-  Wire2.requestFrom(8, 5);    // request 5 bytes from slave device #8 
-  int i = 0;
-  int hitindex=-1;
-  while (Wire2.available() && (i<5) ) { // slave may send less than requested
-    byte b = Wire2.read(); // receive a byte
-    if (b != 0xff) hitindex=i; 
-    msg[i++] = b;        
-  }
-
-  if (hitindex >=0 ) {
-    /*
-    Serial.println(msg[0], BIN);
-    Serial.println(msg[1], BIN);
-    Serial.println(msg[2], BIN);
-    Serial.println(msg[3], BIN);
-    Serial.println(msg[4], BIN);
-    Serial.println("");
-    Serial.println("");
-    Serial.println("");
-    */
-    unsigned short match = (~msg[hitindex])&0x00FF | (hitindex<<8);
-    //Serial.println(match,HEX);  
-    for (i=0; i<sizeof(i2ckeys); i++) {
-      if (match == i2ckeys[i]) {
-        //Serial.println((int)keys[i]);      
-        return (keys[i]);
-      }
+  if (i2cKeyboardPresent) {
+    byte msg[5];
+    Wire2.requestFrom(8, 5);    // request 5 bytes from slave device #8 
+    int i = 0;
+    int hitindex=-1;
+    while (Wire2.available() && (i<5) ) { // slave may send less than requested
+      byte b = Wire2.read(); // receive a byte
+      if (b != 0xff) hitindex=i; 
+      msg[i++] = b;        
     }
+    
+    if (hitindex >=0 ) {
+      /*
+      Serial.println(msg[0], BIN);
+      Serial.println(msg[1], BIN);
+      Serial.println(msg[2], BIN);
+      Serial.println(msg[3], BIN);
+      Serial.println(msg[4], BIN);
+      Serial.println("");
+      Serial.println("");
+      Serial.println("");
+      */
+      unsigned short match = (~msg[hitindex])&0x00FF | (hitindex<<8);
+      //Serial.println(match,HEX);  
+      for (i=0; i<sizeof(i2ckeys); i++) {
+        if (match == i2ckeys[i]) {
+          //Serial.println((int)keys[i]);      
+          return (keys[i]);
+        }
+      }
+    }    
   }
-
 #endif
   return(retval);
 }
