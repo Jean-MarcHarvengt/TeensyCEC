@@ -9,8 +9,6 @@
 #include "zx_filetyp_z80.h"
 #include "emuapi.h"
 
-//-------------------------------------------------------------
-extern uint8_t out_ram;
 
 //--------------------------------------------------------------
 // interne Funktionen
@@ -25,14 +23,14 @@ void ZX_ReadFromFlash_SNA(Z80 *regs, const char * filename)
     if (emu_FileRead(&snafile[0], sizeof(snafile)) == sizeof(snafile)) {
       // Load Z80 registers from SNA
       regs->I        = snafile[ 0];
-      regs->HL1.B.l  = snafile[ 1];
-      regs->HL1.B.h  = snafile[ 2];
-      regs->DE1.B.l  = snafile[ 3];
-      regs->DE1.B.h  = snafile[ 4];
-      regs->BC1.B.l  = snafile[ 5];
-      regs->BC1.B.h  = snafile[ 6];
-      regs->AF1.B.l  = snafile[ 7];
-      regs->AF1.B.h  = snafile[ 8];
+      regs->HLs.B.l  = snafile[ 1];
+      regs->HLs.B.h  = snafile[ 2];
+      regs->DEs.B.l  = snafile[ 3];
+      regs->DEs.B.h  = snafile[ 4];
+      regs->BCs.B.l  = snafile[ 5];
+      regs->BCs.B.h  = snafile[ 6];
+      regs->AFs.B.l  = snafile[ 7];
+      regs->AFs.B.h  = snafile[ 8];
       regs->HL.B.l   = snafile[ 9];
       regs->HL.B.h   = snafile[10];
       regs->DE.B.l   = snafile[11];
@@ -43,24 +41,15 @@ void ZX_ReadFromFlash_SNA(Z80 *regs, const char * filename)
       regs->IY.B.h = snafile[16];
       regs->IX.B.l = snafile[17];
       regs->IX.B.h = snafile[18];
-//regs->IFF1
-//#define IFF_1       0x01       /* IFF1 flip-flop             */
-//#define IFF_IM1     0x02       /* 1: IM1 mode                */
-//#define IFF_IM2     0x04       /* 1: IM2 mode                */
-//#define IFF_2       0x08       /* IFF2 flip-flop             */
-//#define IFF_EI      0x20       /* 1: EI pending              */
-//#define IFF_HALT    0x80       /* 1: CPU HALTed              */
-      
-      //regs->R.W  = snafile[20];
+      regs->IFF1 = regs->IFF2 = (snafile[19]&0x04) >>2;
+      regs->R.W  = snafile[20];
       regs->AF.B.l = snafile[21];
       regs->AF.B.h = snafile[22];
       regs->SP.B.l =snafile[23];
       regs->SP.B.h =snafile[24];
-      //regs->IFF1 = regs->IFF2 = (snafile[19]&0x04) >>2;
-      //regs->IM = snafile[25];
-      //regs->BorderColor = snafile[26];
-      regs->IFF |= (snafile[25]<< 1);
-      
+      regs->IM = snafile[25];
+      regs->BorderColor = snafile[26];
+
 
       // load RAM from SNA
       int direc;
@@ -72,9 +61,9 @@ void ZX_ReadFromFlash_SNA(Z80 *regs, const char * filename)
       }
       emu_FileClose();
       // SP to PC for SNA run
-      regs->PC.B.l = RdZ80(regs->SP.W);
+      regs->PC.B.l = Z80MemRead(regs->SP.W, regs);
       regs->SP.W++;
-      regs->PC.B.h = RdZ80(regs->SP.W);
+      regs->PC.B.h = Z80MemRead(regs->SP.W, regs);
       regs->SP.W++;                    
     }  
   }
@@ -132,7 +121,7 @@ void ZX_ReadFromFlash_Z80(Z80 *R, const uint8_t *data, uint16_t length)
   R->SP.W=(value2<<8)|value1;
 
   R->I=*(ptr++); // I [10]
-  R->R=*(ptr++); // R [11]
+  R->R.W=*(ptr++); // R [11]
   
   // Comressed-Flag & Border [12]
   value1=*(ptr++); 
@@ -146,48 +135,72 @@ void ZX_ReadFromFlash_Z80(Z80 *R, const uint8_t *data, uint16_t length)
 
   R->DE.B.l=*(ptr++); // E [13]
   R->DE.B.h=*(ptr++); // D [14]
-  R->BC1.B.l=*(ptr++); // C1 [15]
-  R->BC1.B.h=*(ptr++); // B1 [16]
-  R->DE1.B.l=*(ptr++); // E1 [17]
-  R->DE1.B.h=*(ptr++); // D1 [18]
-  R->HL1.B.l=*(ptr++); // L1 [19]
-  R->HL1.B.h=*(ptr++); // H1 [20]
-  R->AF1.B.h=*(ptr++); // A1 [21]
-  R->AF1.B.l=*(ptr++); // F1 [22]
+  R->BCs.B.l=*(ptr++); // C1 [15]
+  R->BCs.B.h=*(ptr++); // B1 [16]
+  R->DEs.B.l=*(ptr++); // E1 [17]
+  R->DEs.B.h=*(ptr++); // D1 [18]
+  R->HLs.B.l=*(ptr++); // L1 [19]
+  R->HLs.B.h=*(ptr++); // H1 [20]
+  R->AFs.B.h=*(ptr++); // A1 [21]
+  R->AFs.B.l=*(ptr++); // F1 [22]
   R->IY.B.l=*(ptr++); // Y [23]
   R->IY.B.h=*(ptr++); // I [24]
   R->IX.B.l=*(ptr++); // X [25]
   R->IX.B.h=*(ptr++); // I [26]
 
+//regs->IFF1
+//#define IFF_1       0x01       /* IFF1 flip-flop             */
+//#define IFF_IM1     0x02       /* 1: IM1 mode                */
+//#define IFF_IM2     0x04       /* 1: IM2 mode                */
+//#define IFF_2       0x08       /* IFF2 flip-flop             */
+//#define IFF_EI      0x20       /* 1: EI pending              */
+//#define IFF_HALT    0x80       /* 1: CPU HALTed              */
+
+#define IM1     0x01       /* 1: IM1 mode                */
+#define IM2     0x02       /* 1: IM2 mode                */
+
+//byte IFF1, IFF2, I, halted;
+
+  R->IFF1=0;
+  R->IFF2=0;
+//  R->I=0;
+//  R->halted=0;
+
   // Interrupt-Flag [27]
   value1=*(ptr++); 
   if(value1!=0) {
     // EI
-    R->IFF|=IFF_2|IFF_EI;
+    //R->IFF|=IFF_2|IFF_EI;
+    R->IFF2=1;
+    R->I=1;
   }
   else {
     // DI
-    R->IFF&=~(IFF_1|IFF_2|IFF_EI);
+    //R->IFF&=~(IFF_1|IFF_2|IFF_EI);
   }
   value1=*(ptr++); // nc [28]
   // Interrupt-Mode [29]
   value1=*(ptr++);  
   if((value1&0x01)!=0) {
-    R->IFF|=IFF_IM1;
+    //R->IFF|=IFF_IM1;
+    R->IM|=IM1;
+    R->IFF1|=IM1;
   }
   else {
-    R->IFF&=~IFF_IM1;
+    //R->IFF&=~IFF_IM1;
   }
   if((value1&0x02)!=0) {
-    R->IFF|=IFF_IM2;
+    R->IM|=IM2;
+    R->IFF2|=IM2;
+    //R->IFF|=IFF_IM2;
   }
   else {
-    R->IFF&=~IFF_IM2;
+    //R->IFF&=~IFF_IM2;
   }
   
   // restliche Register
   R->ICount   = R->IPeriod;
-  R->IRequest = INT_NONE; 
+  R->IRequest = INT_NOINT;
   R->IBackup  = 0;
 
   //----------------------------------
@@ -344,4 +357,6 @@ const uint8_t* p_decompFlashBlock(const uint8_t *block_adr)
 
   return(next_block); 
 }
+
+
 

@@ -3,9 +3,44 @@
 #include "emuapi.h"
 #include "zx_filetyp_z80.h"
 
+#include "AY8910.h"
+
 
 #define WIDTH  320
 #define HEIGHT 192
+
+#define CYCLES_PER_FRAME 69888 //3500000/50
+
+typedef struct {
+  int port_ff;      // 0xff = emulate the port,  0x00 alwais 0xFF
+  int ts_lebo;      // left border t states
+  int ts_grap;      // graphic zone t states
+  int ts_ribo;      // right border t states
+  int ts_hore;      // horizontal retrace t states
+  int ts_line;      // to speed the calc, the sum of 4 abobe
+  int line_poin;    // lines in retraze post interrup
+  int line_upbo;    // lines of upper border
+  int line_grap;    // lines of graphic zone = 192
+  int line_bobo;    // lines of bottom border
+  int line_retr;    // lines of the retrace
+  /*
+  int TSTATES_PER_LINE;
+  int TOP_BORDER_LINES;
+  int SCANLINES;
+  int BOTTOM_BORDER_LINES;
+  int tstate_border_left;
+  int tstate_graphic_zone;
+  int tstate_border_right;
+  int hw_model;
+  int int_type;
+  int videopage;
+  int BANKM;
+  int BANK678;
+  */
+} HWOptions ;
+
+static HWOptions hwopt = { 0xFF, 24, 128, 24, 48, 224, 16, 48, 192, 48, 8 };
+//224, 64, 192, 56, 24, 128, 72};
 
 struct { unsigned char R,G,B; } Palette[16] = {
   {   0,   0,   0},
@@ -26,7 +61,7 @@ struct { unsigned char R,G,B; } Palette[16] = {
   { 255, 255, 255}
 };
 
-const uint8_t map_qw[8][5] = {
+const byte map_qw[8][5] = {
     {25, 6,27,29,224}, // vcxz<caps shift=Lshift>
     {10, 9, 7,22, 4}, // gfdsa
     {23,21, 8,26,20}, // trewq
@@ -37,24 +72,26 @@ const uint8_t map_qw[8][5] = {
     { 5,17,16,225,44}, // bnm <symbshift=RSHift> <space>
 };
 
-static uint8_t Z80_RAM[0xC000];                    // 48k RAM
+static byte Z80_RAM[0xC000];                    // 48k RAM
 static Z80 myCPU;
-static uint8_t * volatile VRAM=Z80_RAM;            // What will be displayed. Generally ZX VRAM, can be changed for alt screens.
+static byte * volatile VRAM=Z80_RAM;            // What will be displayed. Generally ZX VRAM, can be changed for alt screens.
 
-//extern const uint8_t rom_zx48_rom[];        // 16k ROM
-static uint8_t key_ram[8]={
+//extern const byte rom_zx48_rom[];        // 16k ROM
+static byte key_ram[8]={
   0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff}; // Keyboard buffer
-uint8_t out_ram;                            // Output (fe port)
-static uint8_t kempston_ram;                       // Kempston-Joystick Buffer
-//static int fila[5][5];
-
+byte out_ram;                            // Output (fe port)
+static byte kempston_ram;                       // Kempston-Joystick Buffer
 
 static int v_border=0;
 static int h_border=32;
 static int bordercolor=0;
 static byte * XBuf=0; 
 
-void displayscanline2 (int y, int f_flash)
+static int lastaudio=CYCLES_PER_FRAME;
+static byte buzzer_val;
+
+
+void displayscanline(int y, int f_flash)
 {
   int x, row, col, dir_p, dir_a, pixeles, tinta, papel, atributos;
 
@@ -110,7 +147,7 @@ static void displayScreen(void) {
     f_flash = 0;
   
   for (y = 0; y < HEIGHT; y++)
-    displayscanline2 (y, f_flash);
+    displayscanline (y, f_flash);
 
   emu_DrawVsync();    
 }
@@ -142,164 +179,40 @@ static void UpdateKeyboard (void)
   } 
 }
 
-/*  
-static void InitKeyboard2(void){
-  fila[1][1] = fila[1][2] = fila[2][2] = fila[3][2] = fila[4][2] =
-    fila[4][1] = fila[3][1] = fila[2][1] = 0xFF;
-}
 
-void UpdateKeyboard2 (void)
+#define MAX_Z80SIZE 49152
+
+
+int endsWith(const char * s, const char * suffix)
 {
-  fila[1][1] = fila[1][2] = fila[2][2] = fila[3][2] =
-    fila[4][2] = fila[4][1] = fila[3][1] = fila[2][1] = 0xFF;
-
-  unsigned char serial_in;
-  serial_in = emu_GetPad();
-  if (serial_in!=0)
-  {
-     if (serial_in=='Z')
-      fila[4][1] &= (0xFD);
-    if (serial_in=='X')
-      fila[4][1] &= (0xFB);
-    if (serial_in=='C')
-      fila[4][1] &= (0xF7);
-    if (serial_in=='V')
-      fila[4][1] &= (0xEF);
-    if (serial_in=='RSHIFT] || key[KEY_LSHIFT')
-      fila[4][1] &= (0xFE);
-  
-    if (serial_in=='A')
-      fila[3][1] &= (0xFE);
-    if (serial_in=='S')
-      fila[3][1] &= (0xFD);
-    if (serial_in=='D')
-      fila[3][1] &= (0xFB);
-    if (serial_in=='F')
-      fila[3][1] &= (0xF7);
-    if (serial_in=='G')
-      fila[3][1] &= (0xEF);
-  
-    if (serial_in=='Q')
-      fila[2][1] &= (0xFE);
-    if (serial_in=='W')
-      fila[2][1] &= (0xFD);
-    if (serial_in=='E')
-      fila[2][1] &= (0xFB);
-    if (serial_in=='R')
-      fila[2][1] &= (0xF7);
-    if (serial_in=='T')
-      fila[2][1] &= (0xEF);
-  
-    if (serial_in=='1')
-      fila[1][1] &= (0xFE);
-    if (serial_in=='2')
-      fila[1][1] &= (0xFD);
-    if (serial_in=='3')
-      fila[1][1] &= (0xFB);
-    if (serial_in=='4')
-      fila[1][1] &= (0xF7);
-    if (serial_in=='5')
-      fila[1][1] &= (0xEF);
-  
-    if (serial_in=='0')
-      fila[1][2] &= (0xFE);
-    if (serial_in=='9')
-      fila[1][2] &= (0xFD);
-    if (serial_in=='8')
-      fila[1][2] &= (0xFB);
-    if (serial_in=='7')
-      fila[1][2] &= (0xF7);
-    if (serial_in=='6')
-      fila[1][2] &= (0xEF);
-  
-    if (serial_in=='P')
-      fila[2][2] &= (0xFE);
-    if (serial_in=='O')
-      fila[2][2] &= (0xFD);
-    if (serial_in=='I')
-      fila[2][2] &= (0xFB);
-    if (serial_in=='U')
-      fila[2][2] &= (0xF7);
-    if (serial_in=='Y')
-      fila[2][2] &= (0xEF);  
-    if (serial_in=='\r')
-      fila[3][2] &= (0xFE);
-
-  
-    if (serial_in=='L')
-      fila[3][2] &= (0xFD);
-    if (serial_in=='K')
-      fila[3][2] &= (0xFB);
-    if (serial_in=='J')
-      fila[3][2] &= (0xF7);
-    if (serial_in=='H')
-      fila[3][2] &= (0xEF);
-  
-    if (serial_in==' ')
-      fila[4][2] &= (0xFE);
-    if (serial_in=='ALT] || key[KEY_ALT')
-      fila[4][2] &= (0xFD);
-    if (serial_in=='M')
-      fila[4][2] &= (0xFB);
-    if (serial_in=='N')
-      fila[4][2] &= (0xF7);
-    if (serial_in=='B')
-      fila[4][2] &= (0xEF);
-  
-    if (serial_in=='BACKSPACE')
-      {
-        fila[4][1] &= (0xFE);
-        fila[1][2] &= (0xFE);
-      }
-    if (serial_in=='TAB')
-      {
-        fila[4][1] &= (0xFE);
-        fila[4][2] &= (0xFD);
-      }
-    if (serial_in=='CAPSLOCK')
-    {
-      fila[1][1] &= (0xFD);
-      fila[4][1] &= (0xFE);
+  int retval = 0;
+  int len = strlen(s);
+  int slen = strlen(suffix);
+  if (len > slen ) {
+    if (!strcmp(&s[len-slen], suffix)) {
+      retval = 1;
     }
-  
-    if (serial_in=='UP')
-    {
-      fila[1][2] &= (0xF7);
-      fila[4][1] &= (0xFE);
-    }   
-    if (serial_in=='DOWN')
-    {
-      fila[1][2] &= (0xEF);
-      fila[4][1] &= (0xFE);
-    }   
-    if (serial_in=='LEFT')
-    {
-      fila[1][1] &= (0xEF);
-      fila[4][1] &= (0xFE);
-    }   
-    if (serial_in=='RIGHT')
-    {
-      fila[1][2] &= (0xFB);
-      fila[4][1] &= (0xFE);
-    }   
   }
+   return (retval);  
 }
-*/
-
-
-#define gamesize 48000
-unsigned char * game;
-
 
 void spec_Start(char * filename) {
-  game = emu_Malloc(gamesize);
-  int size = emu_LoadFile(filename, game, gamesize);  
   memset(Z80_RAM, 0, 0xC000);
-  ZX_ReadFromFlash_Z80(&myCPU, game,size); 
-  JumpZ80(R->PC.W);
-  emu_Free(game);
+  if ( (endsWith(filename, "SNA")) || (endsWith(filename, "sna")) ) {
+    ZX_ReadFromFlash_SNA(&myCPU, filename); 
+  } 
+  else if ( (endsWith(filename, "Z80")) || (endsWith(filename, "z80")) ) {
+    unsigned char * game = emu_Malloc(MAX_Z80SIZE);
+    int size = emu_LoadFile(filename, game, MAX_Z80SIZE);  
+    ZX_ReadFromFlash_Z80(&myCPU, game,size); 
+    emu_Free(game);  
+  }
+#if HAS_SND
+  emu_sndInit(); 
+#endif  
 }
 
+static AY8910 ay;
 
 void spec_Init(void) {
   int J;
@@ -308,20 +221,44 @@ void spec_Init(void) {
     emu_SetPaletteEntry(Palette[J].R,Palette[J].G,Palette[J].B, J);
   
   InitKeyboard();
+ 
+  Reset8910(&ay,3500000,0);
+
   
   if (XBuf == 0) XBuf = (byte *)emu_Malloc(WIDTH);
   VRAM = Z80_RAM;
   memset(Z80_RAM, 0, sizeof(Z80_RAM));
-  ResetZ80(&myCPU);  
+
+  ResetZ80(&myCPU, CYCLES_PER_FRAME);
+#if ALT_Z80CORE  
+  myCPU.RAM = Z80_RAM; 
+  Z80FlagTables();
+#endif      
 }
 
-void spec_Step(void) {
-  
-  //ExecZ80(&myCPU,3500*6/30); // 3.5MHz ticks for 6 lines @ 30 kHz = 700 cycles
- // ExecZ80(&myCPU,3500*192/30); // 3.5MHz ticks for 6 lines @ 30 kHz = 700 cycles
-  ExecZ80(&myCPU,3500000/80); 
-  IntZ80(&myCPU,INT_IRQ); // must be called every 20ms
 
+
+void spec_Step(void) {
+// 32+256+32
+//#define NBLINES (48+192+56+16)
+
+  // Now run the emulator for all the real screen (192 lines)
+  /*
+  int scanl;
+  for (scanl = 0; scanl < NBLINES; scanl++) {
+    int ref=0;
+    emu_resetus();
+    ExecZ80(&myCPU,hwopt.ts_line);
+    while (emu_us() < (20000/NBLINES)) { 
+    }
+  }
+  */
+
+  ExecZ80(&myCPU,CYCLES_PER_FRAME); // 3.5MHz ticks for 6 lines @ 30 kHz = 700 cycles
+#if ALT_Z80CORE
+#else
+  IntZ80(&myCPU,INT_IRQ); // must be called every 20ms
+#endif
   displayScreen();
 
   int k=emu_ReadKeys();
@@ -339,12 +276,10 @@ void spec_Step(void) {
           kempston_ram |= 0x1; //Left
 
 
-  UpdateKeyboard();          
- 
+  UpdateKeyboard();
+    
+  Loop8910(&ay,20);
 }
-
-
-
 
 
 
@@ -357,7 +292,7 @@ void WrZ80(register word Addr,register byte Value)
     Z80_RAM[Addr-BASERAM]=Value;
 }
 
-uint8_t RdZ80(register word Addr)
+byte RdZ80(register word Addr)
 {
   if (Addr<BASERAM) 
     return rom_zx48_rom[Addr];
@@ -365,47 +300,58 @@ uint8_t RdZ80(register word Addr)
     return Z80_RAM[Addr-BASERAM];
 }
 
-#define DAC_ADDR 0x40007428 // 2xu8 output of DAC.
-void OutZ80(register uint16_t Port,register uint8_t Value)
+
+
+void buzz(int val, int currentTstates)
 {
-    if (!(Port & 0x01)) {
-      bordercolor = (Value & 0x07);
-    }
-
-    if((Port&0xFF)==0xFE) {
-        out_ram=Value; // update it
-    }
-
+  //if (val==0) val = -1;
+  //if (buzzer_val!=val)
+  //if (val)   
+  {  
+    int sound_size = (currentTstates-lastaudio);
+    if (sound_size < 0) sound_size += CYCLES_PER_FRAME;    
+#if HAS_SND
+    emu_sndPlayBuzz(sound_size,buzzer_val);  
+#endif    
+    //if (val)
+    //  buzzer_val = 0;     
+    //else
+    //  buzzer_val = 1;
+    buzzer_val = val;          
+  } 
+  lastaudio = currentTstates;
 }
-byte InZ80(register uint16_t port)
+
+void OutZ80(register word Port,register byte Value)
+{
+  if ((Port & 0xC002) == 0xC000) {
+    WrCtrl8910(&ay,(Value &0x0F));
+  }  
+  else if ((Port & 0xC002) == 0x8000) {
+    WrData8910(&ay,Value);
+  }    
+  else if (!(Port & 0x01)) {
+    bordercolor = (Value & 0x07);
+    byte mic = (Value & 0x08);
+    byte ear = (Value & 0x10);
+    buzz(((/*mic|*/ear)?1:0), CYCLES_PER_FRAME-myCPU.ICount);
+  }
+  else if((Port&0xFF)==0xFE) {
+    out_ram=Value; // update it
+  }
+}
+
+byte InZ80(register word port)
 {  
+    if (port == 0xFFFD) {
+      return (RdData8910(&ay));
+    }
+  
     if((port&0xFF)==0x1F) {
         // kempston RAM
         return kempston_ram;
     }
-    /* 
-    if (!(port & 0x01))
-    {    
-      int code = 0xFF;      
-      if (!(port & 0x0100))
-        code &= fila[4][1];
-      if (!(port & 0x0200))
-        code &= fila[3][1];
-      if (!(port & 0x0400))
-        code &= fila[2][1];
-      if (!(port & 0x0800))
-        code &= fila[1][1];
-      if (!(port & 0x1000))
-        code &= fila[1][2];
-      if (!(port & 0x2000))
-        code &= fila[2][2];
-      if (!(port & 0x4000))
-        code &= fila[3][2];
-      if (!(port & 0x8000))
-        code &= fila[4][2];
-      return(code);
-    }
-    */
+
     if ((port&0xFF)==0xFE) {
         switch(port>>8) {
             case 0xFE : return key_ram[0]; break;
@@ -418,9 +364,19 @@ byte InZ80(register uint16_t port)
             case 0x7F : return key_ram[7]; break;
         }
     } 
+
+    if ((port & 0xFF) == 0xFF) {  
+      if (hwopt.port_ff == 0xFF) {
+       return 0xFF;        
+      }
+      else {
+       //code = 1;
+       //if (code == 0xFF) code = 0x00;
+       return 1;
+      }
+    }    
     return 0xFF;
 }
-
 
 
 void PatchZ80(register Z80 *R)
@@ -428,9 +384,10 @@ void PatchZ80(register Z80 *R)
   // nothing to do
 }
 
-
+/*
 word LoopZ80(register Z80 *R)
 {
   // no interrupt triggered
   return INT_NONE;
 }
+*/
