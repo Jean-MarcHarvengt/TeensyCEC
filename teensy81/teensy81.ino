@@ -7,7 +7,7 @@ extern "C" {
 #include <elapsedMillis.h>
 
 extern "C" {
-#include "spec.h"
+#include "zx81.h"
 
 }
 
@@ -180,7 +180,6 @@ int emu_us(void)  {
 
 void loop() {
   uint16_t bClick = emu_DebounceLocalKeys();
-  
   // Global key handling
   if (bClick & MASK_KEY_USER1) {  
     emu_printf((char*)"user1");
@@ -213,7 +212,7 @@ void loop() {
       tft.refresh();
       emu_Init(filename);
     }
-    else if (action == ACTION_RUNVGA) {
+    else if (action == ACTION_RUNVGA)  {
       toggleMenu(false);
       vgaMode = true;
       emu_Init(filename);       
