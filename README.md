@@ -11,7 +11,7 @@ A collection of 80th game console emulators for the Teensy3.6 MCU
 # Teensy Console Emulators Collection
 4 game consoles are currently supported:
 Atari2600 (teensyvcs), Philips Videopac/Odyssey (teensyo2em), Colecovision (teensycolem) and NES (teensynes).<br>
-And 2 computer core supported:
+And 2 computer cores supported:
 Zx81 (teensy81) and Zx Spectrum (teensyspeccy)
 
 All emulators support both ILI9341 TFT and VGA output using the uVGA library https://github.com/qix67/uVGA
