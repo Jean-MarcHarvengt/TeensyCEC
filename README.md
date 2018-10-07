@@ -78,9 +78,9 @@ NES requires 240Mhz for better performances.
   - I2C custom keyboard support!
 - teensy81:
   - .P format support
-  - no sound
   - I2C custom keyboard support!
-  - no HIRES
+  - HIRES support
+  - YM sound support
 
 
 - general:
