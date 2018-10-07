@@ -3,13 +3,13 @@
 
 #define HAS_SND     1
 #define HAS_I2CKBD  1
-//#define ALT_Z80CORE 1
+#define ALT_Z80CORE 1
 
 // Title:     <                                        >
 #define TITLE "            ZX81 Emulator               "
 #define ROMSDIR "z81"
 
-#define emu_Init(ROM) {z81_Init(); z81_Start(ROM);}
+#define emu_Init(ROM) {z81_Start(ROM); z81_Init(); }
 #define emu_Step(x) {z81_Step();}
 
 #define PALETTE_SIZE         2

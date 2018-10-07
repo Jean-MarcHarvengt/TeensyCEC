@@ -1,28 +1,32 @@
 
 #include "z80.h"
+#include "zx80rom.h"
 #include "zx81rom.h"
+#include "emuapi.h"
+#include "common.h"
+#include "AY8910.h"
 
 
-#define WIDTH  320
-#define HEIGHT 192
-#define BORDER 32
-
-#define CYCLES_PER_FRAME 50000//69888 //3500000/50
-
-#define VMEM_PT 0x400c
-
-/* the z80 state */
+static AY8910 ay;
+byte mem[ 65536 ];
 #ifdef ALT_Z80CORE
-static struct Z80 z80;
+unsigned char *memptr[64];
+int memattr[64];
+int unexpanded=0;
+int nmigen=0,hsyncgen=0,vsync=0;
+int vsync_visuals=0;
+volatile int signal_int_flag=0;
+unsigned char *iptr=mem;
+int interrupted=0;
 #else
 static Z80 z80;
 #endif
 
-/* the keyboard state and the memory */
-static byte keyboard[ 9 ];
-static byte memory[ 65536 ];
+/* the keyboard state and other */
+static byte keyboard[ 9 ] = {0xff,0xff,0xff,0xff, 0xff,0xff,0xff,0xff, 0xff};;
 static byte * XBuf=0; 
-static int zx80=0;
+int zx80=0;
+int autoload=1;
 
 
 struct { unsigned char R,G,B; } Palette[16] = {
@@ -54,13 +58,13 @@ void WrZ80(register word Addr,register byte Value)
   /* don't write to rom */
   if ( Addr >= 0x4000 )
   {
-    memory[ Addr ] = Value;
+    mem[ Addr ] = Value;
   }
 }
 
 byte RdZ80(register word Addr)
 {
-  return memory[ Addr ];  
+  return mem[ Addr ];  
 }
 
 void OutZ80(register word Port,register byte Value)
@@ -69,92 +73,241 @@ void OutZ80(register word Port,register byte Value)
 
 byte InZ80(register word port)
 {
-  int i;
+  byte h = port >> 8;
+  byte l = port & 0xff;
   
-  /* any read where the 0th bit of the port is zero reads from the keyboard */
-  if ( ( port & 1 ) == 0 )
-  {
-    /* get the keyboard row */
-    port >>= 8;
-    
-    for ( i = 0; i < 8; i++ )
+  if(l==0xfe) { /* keyboard */
+    switch(h)
     {
-      /* check the first zeroed bit to select the row */
-      if ( ( port & 1 ) == 0 )
-      {
-        /* return the keyboard state for the row */
-        return keyboard[ i ];
-      }
-      port >>= 1;
-    }
-  }    
-}
-
-
-
-/* fetches an opcode from memory */
-byte z80_fetch( struct z80* z80, word a )
-{
-  /* opcodes fetched below 0x8000 are just read */
-  if ( a < 0x8000 )
-  {
-    return memory[ a ];
+      case 0xfe:  return(keyboard[0]);
+      case 0xfd:  return(keyboard[1]);
+      case 0xfb:  return(keyboard[2]);
+      case 0xf7:  return(keyboard[3]);
+      case 0xef:  return(keyboard[4]);
+      case 0xdf:  return(keyboard[5]);
+      case 0xbf:  return(keyboard[6]);
+      case 0x7f:  return(keyboard[7]);
+      default:  return(255);
+    }    
   }
-
-  /*
-  opcodes fetched above 0x7fff are read modulo 0x8000 and as 0 if the 6th bit
-  is reset
-  */
-  byte b = memory[ a & 0x7fff ];
-  return ( b & 64 ) ? b : 0;
+  return(255);
 }
 
-/* reads from memory */
-byte z80_read( struct z80* z80, word a )
-{
-  return RdZ80(a);
-}
 
-/* writes to memory */
-void z80_write( struct z80* z80, word a, byte b )
-{
-  WrZ80(a,b);
-}
-
-/* reads from a port */
-byte z80_in( struct z80* z80, word a )
-{
-  return InZ80(a);
-}
-
-/* writes to a port */
-void z80_out( struct z80* z80, word a, byte b )
-{
-  OutZ80(a,b);
-}
-
+#ifdef ALT_Z80CORE
+#else
 void PatchZ80(register Z80 *R)
 {
   // nothing to do
 }
 
+#endif
 
+
+unsigned int in(int h, int l)
+
+{
+
+  int ts=0;    /* additional cycles*256 */
+  int tapezeromask=0x80;  /* = 0x80 if no tape noise (?) */
+
+  if(!(l&4)) l=0xfb;
+  if(!(l&1)) l=0xfe;
+
+  switch(l)
+  {
+  //case 0xfb:
+  //  return(printer_inout(0,0));
+    
+  case 0xfe:
+    /* also disables hsync/vsync if nmi off
+     * (yes, vsync requires nmi off too, Flight Simulation confirms this)
+     */
+    if(!nmigen)
+    {
+      hsyncgen=0;
+
+      /* if vsync was on before, record position */
+      if(!vsync)
+        vsync_raise();
+      vsync=1;
+
+    }
+
+    switch(h)
+    {
+        case 0xfe:  return(ts|(keyboard[0]^tapezeromask));
+        case 0xfd:  return(ts|(keyboard[1]^tapezeromask));
+        case 0xfb:  return(ts|(keyboard[2]^tapezeromask));
+        case 0xf7:  return(ts|(keyboard[3]^tapezeromask));
+        case 0xef:  return(ts|(keyboard[4]^tapezeromask));
+        case 0xdf:  return(ts|(keyboard[5]^tapezeromask));
+        case 0xbf:  return(ts|(keyboard[6]^tapezeromask));
+        case 0x7f:  return(ts|(keyboard[7]^tapezeromask));
+        default:
+          {
+            int i,mask,retval=0xff;
+          
+            /* some games (e.g. ZX Galaxians) do smart-arse things
+            * like zero more than one bit. What we have to do to
+            * support this is AND together any for which the corresponding
+            * bit is zero.
+            */
+            for(i=0,mask=1;i<8;i++,mask<<=1)
+              if(!(h&mask))
+                retval&=keyboard[i];
+            return(ts|(retval^tapezeromask));
+          }
+    }
+    break;
+  }
+
+  return(ts|255);
+}
+
+unsigned int out(int h,int l,int a)
+
+{
+  /* either in from fe or out to ff takes one extra cycle;
+   * experimentation strongly suggests not only that out to
+   * ff takes one extra, but that *all* outs do.
+   */
+  int ts=1;  /* additional cycles */
+
+
+
+  /* the examples in the manual (using DF/0F) and the
+   * documented ports (CF/0F) don't match, so decode is
+   * important for that.
+   */
+  if(!(l&0xf0))   /* not sure how many needed, so assume all 4 */
+    l=0x0f;
+  else
+    if(!(l&0x20))   /* bit 5 low is common to DF and CF */
+      l=0xdf;
+
+
+  if(!(l&4)) l=0xfb;
+  if(!(l&2)) l=0xfd;
+  if(!(l&1)) l=0xfe;
+
+
+  switch(l)
+  {
+    case 0x0f:    /* Zon X data */   
+      WrData8910(&ay,a);
+      break;
+    case 0xdf:    /* Zon X reg. select */  
+      WrCtrl8910(&ay,(a &0x0F));
+      break;
+  
+    case 0xfb:
+      return(ts/*|printer_inout(1,a)*/);
+    case 0xfd:
+      nmigen=0;
+      break;
+    case 0xfe:
+      if(!zx80)
+      {
+        nmigen=1;
+        break;
+      }
+      /* falls through, if zx80 */
+    case 0xff:  /* XXX should *any* out turn off vsync? */
+      /* fill screen gap since last raising of vsync */
+      if(vsync)
+        vsync_lower();
+      vsync=0;
+      hsyncgen=1;
+      break;
+  }
+
+  return(ts);
+}
+
+
+
+
+
+
+
+void sighandler(int a)
+{
+  signal_int_flag=1;
+}
+
+void frame_pause(void)
+{
+  signal_int_flag=0;
+
+  if(interrupted<2)
+    interrupted=1;
+}
+
+void do_interrupt()
+{
+  /* being careful here not to screw up any pending reset... */
+  if(interrupted==1)
+    interrupted=0;
+}
+
+
+
+
+
+void bitbufBlit(unsigned char * buf)
+{
+  memset( XBuf, 1, WIDTH*8 ); 
+  buf = buf + (ZX_VID_MARGIN*(ZX_VID_FULLWIDTH/8));
+  int y,x,i;
+  byte d;
+  for(y=0;y<192;y++)
+  {
+    byte * src = buf + 4;
+    for(x=0;x<32;x++)
+    {
+      byte * dst=&XBuf[(x<<3)+BORDER];
+      d = *src++;
+      for (i=0;i<8;i++)
+      {
+        if ( d & 128 )
+        {
+          *dst++=0;
+        }
+        else
+        {
+          *dst++=1;
+        }
+        d <<= 1;
+      }       
+    }
+    emu_DrawLine(&XBuf[0], WIDTH, HEIGHT, y);   
+    buf += (ZX_VID_FULLWIDTH/8);
+  }
+}
 
 
 static void displayScreen(void) {
-  int row, col,i,j;
-  int y=0;
-  int d_file = memory[ VMEM_PT ] | memory[ VMEM_PT + 1 ] << 8;
-  byte *charset = &rom[0x1e00];
+  int row,i,j,x,y=0;
+  byte * ptr;
+
+  ptr=mem+fetch2(16396);
+  /* since we can't just do "don't bother if it's junk" as we always
+   * need to draw a screen, just draw *valid* junk that won't result
+   * in a segfault or anything. :-)
+   */
+  if(ptr-mem<0 || ptr-mem>0xf000) ptr=mem+0xf000;
+  ptr++;  /* skip first HALT */
+  byte *charset = &zx81rom[0x1e00];
   for ( row = 0; row < 24; row++ )
   {
     memset( XBuf, 1, WIDTH*8 );    
-    for ( col = 0; col < 32; col++ )
+    for ( x = 0; x < 32; x++ )
     {
-      byte * dst=&XBuf[(col<<3)+BORDER];
-      byte c = memory[ ++d_file ];
+      byte * dst=&XBuf[(x<<3)+BORDER];
+      byte c = *ptr++;
       if (c<64) {
-         byte * ptr=&charset[(int)c<<3];
+        byte * ptr=&charset[(int)c<<3];
         for (j=0;j<8;j++)
         {
           byte b = *ptr++;
@@ -201,10 +354,8 @@ static void displayScreen(void) {
       emu_DrawLine(&XBuf[j*WIDTH], WIDTH, HEIGHT, y++);   
     }
     /* skip the 0x76 at the end of the line */
-    d_file++;
-  }  
-
-  emu_DrawVsync();    
+    ptr++;
+  }      
 }
 
 static void updateKeyboard (void)
@@ -266,120 +417,160 @@ static void handleKeyBuf(void)
   }
 }
 
+/* despite the name, this also works for the ZX80 :-) */
+void reset81()
+{
+  interrupted=2;  /* will cause a reset */
+  memset(mem+16384,0,49152);
+}
 
 void load_p(int a)
 {
-  emu_printf("loading tape");
+  emu_printf("load");
+
+  int got_ascii_already=0;
+  if(zx80) {
+//    strcpy(fname,"zx80prog.p");    
+  }
+  else
+  {
+    if(a>=32768)   /* they did LOAD "" */
+    {
+      got_ascii_already=1;
+      emu_printf("got ascii");
+    } 
+    if(!got_ascii_already)
+    {
+      /* test for Xtender-style LOAD " STOP " to quit */
+      //if(*ptr==227) exit_program();    
+      //memset(fname,0,sizeof(fname));
+      //do
+      //  *dptr++=zx2ascii[(*ptr)&63];
+      //while((*ptr++)<128 && dptr<fname+sizeof(fname)-3);
+      /* add '.p' */
+      //strcat(fname,".p");
+    }
+  }
+    
+
   emu_printf(tapename);
-  if ( emu_FileOpen(tapename) ) {
-    int size = emu_FileSize();
-    emu_FileRead(memory + (zx80?0x4000:0x4009), size);
-    emu_FileClose();
-  }      
+  if ( !emu_FileOpen(tapename) ) {
+    /* the partial snap will crash without a file, so reset */
+    if(autoload)
+      reset81(),autoload=0;
+    return;    
+
+  }
+
+  autoload=0;
+  int size = emu_FileSize();
+  emu_FileRead(mem + (zx80?0x4000:0x4009), size);
+  emu_FileClose();
+
+  if(zx80)
+    store(0x400b,fetch(0x400b)+1);         
 }
 
-static void hacks(void)
+void save_p(int a)
 {
-  byte *mem = memory;
-
-  /* patch load routine */
-  mem[0x347]=0xeb;
-  mem[0x348]=0xed; mem[0x349]=0xfc;
-  mem[0x34a]=0xc3; mem[0x34b]=0x07; mem[0x34c]=0x02;
-
   
-#if UNUSED  
-  /* remove fast mode stuff which screws it all up */
-  mem[0x4cc]=mem[0x4cd]=mem[0x4ce]=0;
+}
 
-  /* replace kybd routine itself, with ld hl,(lastk):ret */
-  mem[0x2bb]=0x2a; mem[0x2bc]=0x25; mem[0x2bd]=0x40; mem[0x2be]=0xc9;
-  
-  /* a 'force F/0' at 66h; ok, as we simulate NMI effects by other means */
-  mem[0x66]=0xcf; mem[0x67]=0x0e;
-  
+
+
+void zx81hacks()
+{
   /* patch save routine */
   mem[0x2fc]=0xed; mem[0x2fd]=0xfd;
   mem[0x2fe]=0xc3; mem[0x2ff]=0x07; mem[0x300]=0x02;
-  
+
   /* patch load routine */
   mem[0x347]=0xeb;
   mem[0x348]=0xed; mem[0x349]=0xfc;
   mem[0x34a]=0xc3; mem[0x34b]=0x07; mem[0x34c]=0x02;
-  
-  /* make fast/slow more traceable (directly modify bit 7 rather than
-   * bit 6 of CDFLAGS)
-   */
-  mem[0xf29]=0xbe;
-  mem[0xf2e]=0xfe;
-  
-  /* do 'out (0),a' when waiting for input (for fast mode display check) */
-  mem[0x4ca]=0xd3; mem[0x4cb]=0;      /* out (0),a */
-  mem[0x4cc]=0xcb; mem[0x4cd]=0x46;   /* loop: bit 0,(hl) */
-  mem[0x4ce]=0x28; mem[0x4cf]=0xfc;   /* jr z,loop */
-  mem[0x4d0]=0xd3; mem[0x4d1]=1;      /* out (1),a */
-  mem[0x4d2]=0; /* nop, as filler */
-  
-  /* skip some more weird fast mode stuff */
-  mem[0x2ec]=0xc9;
-  
-  /* we need the following crock to support 'PAUSE'... */
-  
-  mem[0xf3b]=0x29;  /* call 0229h */
-  
-  mem[0x229]=0x22;  /* ld (04034h),hl:nop */
-  mem[0x22c]=0;
-  
-  mem[0x23e]=0x2a; mem[0x23f]=0x25; mem[0x240]=0x40;  /* ld hl,(0403bh) */
-  mem[0x241]=0x23;          /* inc hl */
-  mem[0x242]=0x3e; mem[0x243]=0x7f;     /* ld a,07fh */
-  mem[0x244]=0xa4;          /* and h */
-  mem[0x245]=0xb5;          /* or l */
-  mem[0x246]=0xc0;          /* ret nz */
-  
-  mem[0x247]=0x2a;  /* ld hl,(04034h) */
-  mem[0x248]=0x34;
-  mem[0x249]=0x40;
-  
-  mem[0x24a]=0xc3;  /* jp 022dh */
-  mem[0x24b]=0x2d;
-  mem[0x24c]=0x02;
-  
-  /* nop out ld (04034h),hl */
-  mem[0x23a]=0; mem[0x23a]=0; mem[0x23a]=0;
-  
-  /* nop out call to 207h */
-  mem[0xf41]=0; mem[0xf42]=0; mem[0xf43]=0;
-
-#endif  
 }
 
+void zx80hacks()
+{
+  /* patch save routine */
+  mem[0x1b6]=0xed; mem[0x1b7]=0xfd;
+  mem[0x1b8]=0xc3; mem[0x1b9]=0x83; mem[0x1ba]=0x02;
+
+  /* patch load routine */
+  mem[0x206]=0xed; mem[0x207]=0xfc;
+  mem[0x208]=0xc3; mem[0x209]=0x83; mem[0x20a]=0x02;
+}
 
 
 void z81_Init(void) 
 {
+#if HAS_SND
+  emu_sndInit(); 
+#endif 
+
+  if (emu_ReadKeys() & MASK_KEY_USER2) setzx80mode(); 
+  
   if (XBuf == 0) XBuf = (byte *)emu_Malloc(WIDTH*8);
   /* Set up the palette */
   int J;
   for(J=0;J<2;J++)
     emu_SetPaletteEntry(Palette[J].R,Palette[J].G,Palette[J].B, J);
-
+  
+  Reset8910(&ay,3500000,0);
+  
   /* load rom with ghosting at 0x2000 */
-  memcpy( memory + 0x0000, rom, 0x2000  );
-  hacks();
+  if(zx80)
+  {
+    memcpy( mem + 0x0000, zx80rom, 0x1000  );    
+    memcpy(mem+0x1000*2,mem,0x1000*2);
+  }
+  else 
+  {
+    memcpy( mem + 0x0000, zx81rom, 0x2000  );
+    memset(mem+0x4000,0,0xc000);     
+  }
+
+  int f;
+  int ramsize;
+  int count;
+  /* ROM setup */
+  count=0;
+  for(f=0;f<16;f++)
+  {
+    memattr[f]=memattr[32+f]=0;
+    memptr[f]=memptr[32+f]=mem+1024*count;
+    count++;
+    if(count>=(zx80?4:8)) count=0;
+  }
+
+  /* RAM setup */
+  ramsize=16;
+  if(unexpanded)
+    ramsize=1;
+  count=0;
+  for(f=16;f<32;f++)
+  {
+    memattr[f]=memattr[32+f]=1;
+    memptr[f]=memptr[32+f]=mem+1024*(16+count);
+    count++;
+    if(count>=ramsize) count=0;
+  }
+   
+  if(zx80)
+    zx80hacks();
+  else
+    zx81hacks();
+
+  
   /* patch DISPLAY-5 to a return */
-  memory[ 0x02b5 + 0x0000 ] = 0xc9;
-  memcpy( memory + 0x2000, memory, 0x2000 );
+  //mem[ 0x02b5 + 0x0000 ] = 0xc9;
+  //memcpy( mem + 0x2000, mem, 0x2000 );
 
   /* reset the keyboard state */
   memset( keyboard, 255, sizeof( keyboard ) );  
   
 #ifdef ALT_Z80CORE
-  memset( &z80, 0, sizeof( z80 ) );
-  /* setup the registers */
-  z80.pc  = 0;
-  z80.iff = 0;
-  z80.af_sel = z80.regs_sel = 0;
+  ResetZ80();
 #else
   ResetZ80(&z80, CYCLES_PER_FRAME);
 #endif 
@@ -389,26 +580,18 @@ void z81_Init(void)
 
 void z81_Step(void)
 {
-  /*
-  execute 100000 z80 instructions; the less instructions we execute here the
-  slower the emulation gets, the more we execute the less responsive the
-  keyboard gets
-  */  
-#ifdef ALT_Z80CORE
-  int count;
-  
-  for ( count = 0; count < 100000; count++ )
-  {
-    z80_step( &z80 );
-  }
-
+#ifdef ALT_Z80CORE 
+  ExecZ80();
+  sighandler(0);
 #else
   ExecZ80(&z80,CYCLES_PER_FRAME); // 3.5MHz ticks for 6 lines @ 30 kHz = 700 cycles
   IntZ80(&z80,INT_IRQ); // must be called every 20ms
-#endif  
   displayScreen();
+  if (strlen(tapename)) handleKeyBuf();  
+#endif  
+  emu_DrawVsync(); 
   updateKeyboard();
-  if (strlen(tapename)) handleKeyBuf();     
+  Loop8910(&ay,20);     
 }
 
 

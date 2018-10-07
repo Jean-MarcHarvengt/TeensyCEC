@@ -342,7 +342,7 @@ int handleMenu(uint16_t bClick)
 
   int rx=0,ry=0,rw=0,rh=0;
   char c = captureTouchZone(menutouchareas, menutouchactions, &rx,&ry,&rw,&rh);
-  if ( (bClick & MASK_JOY2_BTN) && (entry.isDirectory()) ) {
+  if ( ( (bClick & MASK_JOY2_BTN) || (bClick & MASK_KEY_USER1) )  && (entry.isDirectory()) ) {
       menuRedraw=true;
       strcpy(romspath,newpath.c_str());
       curFile = 0;
