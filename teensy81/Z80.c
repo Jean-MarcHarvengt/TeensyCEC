@@ -1,685 +1,396 @@
-/** Z80: portable Z80 emulator *******************************/
-/**                                                         **/
-/**                           Z80.c                         **/
-/**                                                         **/
-/** This file contains implementation for Z80 CPU. Don't    **/
-/** forget to provide RdZ80(), WrZ80(), InZ80(), OutZ80(),  **/
-/** LoopZ80(), and PatchZ80() functions to accomodate the   **/
-/** emulated machine's architecture.                        **/
-/**                                                         **/
-/** Copyright (C) Marat Fayzullin 1994-2007                 **/
-/**     You are not allowed to distribute this software     **/
-/**     commercially. Please, notify me, if you make any    **/   
-/**     changes to this file.                               **/
-/*************************************************************/
+/* Emulation of the Z80 CPU with hooks into the other parts of z81.
+ * Copyright (C) 1994 Ian Collier.
+ * z81 changes (C) 1995-2001 Russell Marks.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
 
-#include "Z80.h"
-#include "Tables.h"
-#include <stdio.h>
 
-/** INLINE ***************************************************/
-/** C99 standard has "inline", but older compilers used     **/
-/** __inline for the same purpose.                          **/
-/*************************************************************/
-#ifdef __C99__
-#define INLINE static inline
-#else
-#define INLINE static __inline
-#endif
+#include <string.h>	/* for memset/memcpy */
+#include "z80.h"
 
-/** System-Dependent Stuff ***********************************/
-/** This is system-dependent code put here to speed things  **/
-/** up. It has to stay inlined to be fast.                  **/
-/*************************************************************/
-#ifdef COLEM
-#define RdZ80 RDZ80
-extern byte *ROMPage[];
-INLINE byte RdZ80(word A) { return(ROMPage[A>>13][A&0x1FFF]); }
-#endif
+#define parity(a) (partable[a])
 
-#ifdef SPECCY
-#define RdZ80 RDZ80
-#define WrZ80 WRZ80
-extern byte *Page[],*ROM;
-INLINE byte RdZ80(word A)        { return(Page[A>>13][A&0x1FFF]); }
-INLINE void WrZ80(word A,byte V) { if(Page[A>>13]<ROM) Page[A>>13][A&0x1FFF]=V; }
-#endif
+unsigned char partable[256]={
+      4, 0, 0, 4, 0, 4, 4, 0, 0, 4, 4, 0, 4, 0, 0, 4,
+      0, 4, 4, 0, 4, 0, 0, 4, 4, 0, 0, 4, 0, 4, 4, 0,
+      0, 4, 4, 0, 4, 0, 0, 4, 4, 0, 0, 4, 0, 4, 4, 0,
+      4, 0, 0, 4, 0, 4, 4, 0, 0, 4, 4, 0, 4, 0, 0, 4,
+      0, 4, 4, 0, 4, 0, 0, 4, 4, 0, 0, 4, 0, 4, 4, 0,
+      4, 0, 0, 4, 0, 4, 4, 0, 0, 4, 4, 0, 4, 0, 0, 4,
+      4, 0, 0, 4, 0, 4, 4, 0, 0, 4, 4, 0, 4, 0, 0, 4,
+      0, 4, 4, 0, 4, 0, 0, 4, 4, 0, 0, 4, 0, 4, 4, 0,
+      0, 4, 4, 0, 4, 0, 0, 4, 4, 0, 0, 4, 0, 4, 4, 0,
+      4, 0, 0, 4, 0, 4, 4, 0, 0, 4, 4, 0, 4, 0, 0, 4,
+      4, 0, 0, 4, 0, 4, 4, 0, 0, 4, 4, 0, 4, 0, 0, 4,
+      0, 4, 4, 0, 4, 0, 0, 4, 4, 0, 0, 4, 0, 4, 4, 0,
+      4, 0, 0, 4, 0, 4, 4, 0, 0, 4, 4, 0, 4, 0, 0, 4,
+      0, 4, 4, 0, 4, 0, 0, 4, 4, 0, 0, 4, 0, 4, 4, 0,
+      0, 4, 4, 0, 4, 0, 0, 4, 4, 0, 0, 4, 0, 4, 4, 0,
+      4, 0, 0, 4, 0, 4, 4, 0, 0, 4, 4, 0, 4, 0, 0, 4
+   };
 
-#ifdef MG
-#define RdZ80 RDZ80
-extern byte *Page[];
-INLINE byte RdZ80(word A) { return(Page[A>>13][A&0x1FFF]); }
-#endif
 
-#ifdef FMSX
-#define FAST_RDOP
-extern byte *RAM[];
-INLINE byte OpZ80(word A) { return(RAM[A>>13][A&0x1FFF]); }
-#endif
+unsigned long tstates=0,tsmax=65000,frames=0;
 
-/** FAST_RDOP ************************************************/
-/** With this #define not present, RdZ80() should perform   **/
-/** the functions of OpZ80().                               **/
-/*************************************************************/
-#ifndef FAST_RDOP
-#define OpZ80(A) RdZ80(A)
-#endif
+/* odd place to have this, but the display does work in an odd way :-) */
+unsigned char scrnbmp_new[ZX_VID_FULLWIDTH*ZX_VID_FULLHEIGHT/8]; /* written */
 
-#define S(Fl)        R->AF.B.l|=Fl
-#define R(Fl)        R->AF.B.l&=~(Fl)
-#define FLAGS(Rg,Fl) R->AF.B.l=Fl|ZSTable[Rg]
+/* checked against for diffs */
+static int liney=0;
+static int vsy=0;
+static unsigned long linestart=0;
+static int vsync_toggle=0,vsync_lasttoggle=0;
 
-#define M_RLC(Rg)      \
-  R->AF.B.l=Rg>>7;Rg=(Rg<<1)|R->AF.B.l;R->AF.B.l|=PZSTable[Rg]
-#define M_RRC(Rg)      \
-  R->AF.B.l=Rg&0x01;Rg=(Rg>>1)|(R->AF.B.l<<7);R->AF.B.l|=PZSTable[Rg]
-#define M_RL(Rg)       \
-  if(Rg&0x80)          \
-  {                    \
-    Rg=(Rg<<1)|(R->AF.B.l&C_FLAG); \
-    R->AF.B.l=PZSTable[Rg]|C_FLAG; \
-  }                    \
-  else                 \
-  {                    \
-    Rg=(Rg<<1)|(R->AF.B.l&C_FLAG); \
-    R->AF.B.l=PZSTable[Rg];        \
+
+#define LINEX 	((tstates-linestart)>>2)
+
+
+void setzx80mode(void) {
+  autoload = 0;
+  zx80=1;
+}
+
+/* for vsync off -> on */
+void vsync_raise(void)
+{
+  /* save current pos */
+  vsy=liney;
+}
+
+/* for vsync on -> off */
+void vsync_lower(void)
+{
+  int ny=liney,y;
+
+  vsync_toggle++;
+
+  /* we don't emulate this stuff by default; if nothing else,
+   * it can be fscking annoying when you're typing in a program.
+   */
+  if(!vsync_visuals)
+    return;
+
+  /* even when we do emulate it, we don't bother with x timing,
+   * just the y. It gives reasonable results without being too
+   * complicated, I think.
+   */
+  if(vsy<0) vsy=0;
+  if(vsy>=ZX_VID_FULLHEIGHT) vsy=ZX_VID_FULLHEIGHT-1;
+  if(ny<0) ny=0;
+  if(ny>=ZX_VID_FULLHEIGHT) ny=ZX_VID_FULLHEIGHT-1;
+
+  /* XXX both of these could/should be made into single memset calls */
+  if(ny<vsy)
+  {
+    /* must be wrapping around a frame edge; do bottom half */
+    for(y=vsy;y<ZX_VID_FULLHEIGHT;y++)
+      memset(scrnbmp_new+y*(ZX_VID_FULLWIDTH/8),0xff,ZX_VID_FULLWIDTH/8);
+    vsy=0;
   }
-#define M_RR(Rg)       \
-  if(Rg&0x01)          \
-  {                    \
-    Rg=(Rg>>1)|(R->AF.B.l<<7);     \
-    R->AF.B.l=PZSTable[Rg]|C_FLAG; \
-  }                    \
-  else                 \
-  {                    \
-    Rg=(Rg>>1)|(R->AF.B.l<<7);     \
-    R->AF.B.l=PZSTable[Rg];        \
-  }
+
+  for(y=vsy;y<ny;y++)
+    memset(scrnbmp_new+y*(ZX_VID_FULLWIDTH/8),0xff,ZX_VID_FULLWIDTH/8);
+}
+
+
+unsigned char a, f, b, c, d, e, h, l;
+unsigned char r, a1, f1, b1, c1, d1, e1, h1, l1, i, iff1, iff2, im;
+unsigned short pc;
+unsigned short ix, iy, sp;
+unsigned long nextlinetime=0,linegap=208,lastvsyncpend=0;
+unsigned char radjust;
+unsigned char ixoriy, new_ixoriy;
+unsigned char intsample=0;
+unsigned char op;
+int ulacharline=0;
+int nmipend=0,intpend=0,vsyncpend=0,vsynclen=0;
+int hsyncskip=0;
+int framewait=0;
+
+void ResetZ80(void)
+{
+  a=f=b=c=d=e=h=l=a1=f1=b1=c1=d1=e1=h1=l1=i=iff1=iff2=im=r=0;
+  ixoriy=new_ixoriy=0;
+  ix=iy=sp=pc=0;
+  tstates=radjust=0;
+  nextlinetime=linegap; 
+
+  if(autoload)
+  {
+    /* we load a snapshot, in effect. The memory was done by
+     * common.c, this does the registers.
+     */
+    static unsigned char bit1[9]={0xFF,0x80,0xFC,0x7F,0x00,0x80,0x00,0xFE,0xFF};
+    static unsigned char bit2[4]={0x76,0x06,0x00,0x3e};
   
-#define M_SLA(Rg)      \
-  R->AF.B.l=Rg>>7;Rg<<=1;R->AF.B.l|=PZSTable[Rg]
-#define M_SRA(Rg)      \
-  R->AF.B.l=Rg&C_FLAG;Rg=(Rg>>1)|(Rg&0x80);R->AF.B.l|=PZSTable[Rg]
+    /* memory will already be zeroed at this point */
+    memcpy(mem+0x4000,bit1,9);
+    memcpy(mem+0x7ffc,bit2,4);
+    a=0x0B; f=0x85; b=0x00; c=0xFF;
+    d=0x43; e=0x99; h=0xC3; l=0x99;
+    a1=0xE2; f1=0xA1; b1=0x81; c1=0x02;
+    d1=0x00; e1=0x2B; h1=0x00; l1=0x00;
+    i=0x1E; iff1=iff2=0;
+    im=2;
+    r=0xDD; radjust=0xCA;
+    ix=0x281; iy=0x4000;
+    sp=0x7FFC;
+    pc=0x207;
 
-#define M_SLL(Rg)      \
-  R->AF.B.l=Rg>>7;Rg=(Rg<<1)|0x01;R->AF.B.l|=PZSTable[Rg]
-#define M_SRL(Rg)      \
-  R->AF.B.l=Rg&0x01;Rg>>=1;R->AF.B.l|=PZSTable[Rg]
+    /* finally, load. It'll reset (via reset81) if it fails. */
+    load_p(32768);
 
-#define M_BIT(Bit,Rg)  \
-  R->AF.B.l=(R->AF.B.l&C_FLAG)|H_FLAG|PZSTable[Rg&(1<<Bit)]
+    /* wait for a real frame, to avoid an annoying frame `jump'. */
+    framewait=1;
+  }
+}
 
-#define M_SET(Bit,Rg) Rg|=1<<Bit
-#define M_RES(Bit,Rg) Rg&=~(1<<Bit)
 
-#define M_POP(Rg)      \
-  R->Rg.B.l=OpZ80(R->SP.W++);R->Rg.B.h=OpZ80(R->SP.W++)
-#define M_PUSH(Rg)     \
-  WrZ80(--R->SP.W,R->Rg.B.h);WrZ80(--R->SP.W,R->Rg.B.l)
-
-#define M_CALL         \
-  J.B.l=OpZ80(R->PC.W++);J.B.h=OpZ80(R->PC.W++);         \
-  WrZ80(--R->SP.W,R->PC.B.h);WrZ80(--R->SP.W,R->PC.B.l); \
-  R->PC.W=J.W; \
-  JumpZ80(J.W)
-
-#define M_JP  J.B.l=OpZ80(R->PC.W++);J.B.h=OpZ80(R->PC.W);R->PC.W=J.W;JumpZ80(J.W)
-#define M_JR  R->PC.W+=(offset)OpZ80(R->PC.W)+1;JumpZ80(R->PC.W)
-#define M_RET R->PC.B.l=OpZ80(R->SP.W++);R->PC.B.h=OpZ80(R->SP.W++);JumpZ80(R->PC.W)
-
-#define M_RST(Ad)      \
-  WrZ80(--R->SP.W,R->PC.B.h);WrZ80(--R->SP.W,R->PC.B.l);R->PC.W=Ad;JumpZ80(Ad)
-
-#define M_LDWORD(Rg)   \
-  R->Rg.B.l=OpZ80(R->PC.W++);R->Rg.B.h=OpZ80(R->PC.W++)
-
-#define M_ADD(Rg)      \
-  J.W=R->AF.B.h+Rg;    \
-  R->AF.B.l=           \
-    (~(R->AF.B.h^Rg)&(Rg^J.B.l)&0x80? V_FLAG:0)| \
-    J.B.h|ZSTable[J.B.l]|                        \
-    ((R->AF.B.h^Rg^J.B.l)&H_FLAG);               \
-  R->AF.B.h=J.B.l       
-
-#define M_SUB(Rg)      \
-  J.W=R->AF.B.h-Rg;    \
-  R->AF.B.l=           \
-    ((R->AF.B.h^Rg)&(R->AF.B.h^J.B.l)&0x80? V_FLAG:0)| \
-    N_FLAG|-J.B.h|ZSTable[J.B.l]|                      \
-    ((R->AF.B.h^Rg^J.B.l)&H_FLAG);                     \
-  R->AF.B.h=J.B.l
-
-#define M_ADC(Rg)      \
-  J.W=R->AF.B.h+Rg+(R->AF.B.l&C_FLAG); \
-  R->AF.B.l=                           \
-    (~(R->AF.B.h^Rg)&(Rg^J.B.l)&0x80? V_FLAG:0)| \
-    J.B.h|ZSTable[J.B.l]|              \
-    ((R->AF.B.h^Rg^J.B.l)&H_FLAG);     \
-  R->AF.B.h=J.B.l
-
-#define M_SBC(Rg)      \
-  J.W=R->AF.B.h-Rg-(R->AF.B.l&C_FLAG); \
-  R->AF.B.l=                           \
-    ((R->AF.B.h^Rg)&(R->AF.B.h^J.B.l)&0x80? V_FLAG:0)| \
-    N_FLAG|-J.B.h|ZSTable[J.B.l]|      \
-    ((R->AF.B.h^Rg^J.B.l)&H_FLAG);     \
-  R->AF.B.h=J.B.l
-
-#define M_CP(Rg)       \
-  J.W=R->AF.B.h-Rg;    \
-  R->AF.B.l=           \
-    ((R->AF.B.h^Rg)&(R->AF.B.h^J.B.l)&0x80? V_FLAG:0)| \
-    N_FLAG|-J.B.h|ZSTable[J.B.l]|                      \
-    ((R->AF.B.h^Rg^J.B.l)&H_FLAG)
-
-#define M_AND(Rg) R->AF.B.h&=Rg;R->AF.B.l=H_FLAG|PZSTable[R->AF.B.h]
-#define M_OR(Rg)  R->AF.B.h|=Rg;R->AF.B.l=PZSTable[R->AF.B.h]
-#define M_XOR(Rg) R->AF.B.h^=Rg;R->AF.B.l=PZSTable[R->AF.B.h]
-
-#define M_IN(Rg)        \
-  Rg=InZ80(R->BC.W);  \
-  R->AF.B.l=PZSTable[Rg]|(R->AF.B.l&C_FLAG)
-
-#define M_INC(Rg)       \
-  Rg++;                 \
-  R->AF.B.l=            \
-    (R->AF.B.l&C_FLAG)|ZSTable[Rg]|           \
-    (Rg==0x80? V_FLAG:0)|(Rg&0x0F? 0:H_FLAG)
-
-#define M_DEC(Rg)       \
-  Rg--;                 \
-  R->AF.B.l=            \
-    N_FLAG|(R->AF.B.l&C_FLAG)|ZSTable[Rg]| \
-    (Rg==0x7F? V_FLAG:0)|((Rg&0x0F)==0x0F? H_FLAG:0)
-
-#define M_ADDW(Rg1,Rg2) \
-  J.W=(R->Rg1.W+R->Rg2.W)&0xFFFF;                        \
-  R->AF.B.l=                                             \
-    (R->AF.B.l&~(H_FLAG|N_FLAG|C_FLAG))|                 \
-    ((R->Rg1.W^R->Rg2.W^J.W)&0x1000? H_FLAG:0)|          \
-    (((long)R->Rg1.W+(long)R->Rg2.W)&0x10000? C_FLAG:0); \
-  R->Rg1.W=J.W
-
-#define M_ADCW(Rg)      \
-  I=R->AF.B.l&C_FLAG;J.W=(R->HL.W+R->Rg.W+I)&0xFFFF;           \
-  R->AF.B.l=                                                   \
-    (((long)R->HL.W+(long)R->Rg.W+(long)I)&0x10000? C_FLAG:0)| \
-    (~(R->HL.W^R->Rg.W)&(R->Rg.W^J.W)&0x8000? V_FLAG:0)|       \
-    ((R->HL.W^R->Rg.W^J.W)&0x1000? H_FLAG:0)|                  \
-    (J.W? 0:Z_FLAG)|(J.B.h&S_FLAG);                            \
-  R->HL.W=J.W
-   
-#define M_SBCW(Rg)      \
-  I=R->AF.B.l&C_FLAG;J.W=(R->HL.W-R->Rg.W-I)&0xFFFF;           \
-  R->AF.B.l=                                                   \
-    N_FLAG|                                                    \
-    (((long)R->HL.W-(long)R->Rg.W-(long)I)&0x10000? C_FLAG:0)| \
-    ((R->HL.W^R->Rg.W)&(R->HL.W^J.W)&0x8000? V_FLAG:0)|        \
-    ((R->HL.W^R->Rg.W^J.W)&0x1000? H_FLAG:0)|                  \
-    (J.W? 0:Z_FLAG)|(J.B.h&S_FLAG);                            \
-  R->HL.W=J.W
-
-enum Codes
+void ExecZ80(void)
 {
-  NOP,LD_BC_WORD,LD_xBC_A,INC_BC,INC_B,DEC_B,LD_B_BYTE,RLCA,
-  EX_AF_AF,ADD_HL_BC,LD_A_xBC,DEC_BC,INC_C,DEC_C,LD_C_BYTE,RRCA,
-  DJNZ,LD_DE_WORD,LD_xDE_A,INC_DE,INC_D,DEC_D,LD_D_BYTE,RLA,
-  JR,ADD_HL_DE,LD_A_xDE,DEC_DE,INC_E,DEC_E,LD_E_BYTE,RRA,
-  JR_NZ,LD_HL_WORD,LD_xWORD_HL,INC_HL,INC_H,DEC_H,LD_H_BYTE,DAA,
-  JR_Z,ADD_HL_HL,LD_HL_xWORD,DEC_HL,INC_L,DEC_L,LD_L_BYTE,CPL,
-  JR_NC,LD_SP_WORD,LD_xWORD_A,INC_SP,INC_xHL,DEC_xHL,LD_xHL_BYTE,SCF,
-  JR_C,ADD_HL_SP,LD_A_xWORD,DEC_SP,INC_A,DEC_A,LD_A_BYTE,CCF,
-  LD_B_B,LD_B_C,LD_B_D,LD_B_E,LD_B_H,LD_B_L,LD_B_xHL,LD_B_A,
-  LD_C_B,LD_C_C,LD_C_D,LD_C_E,LD_C_H,LD_C_L,LD_C_xHL,LD_C_A,
-  LD_D_B,LD_D_C,LD_D_D,LD_D_E,LD_D_H,LD_D_L,LD_D_xHL,LD_D_A,
-  LD_E_B,LD_E_C,LD_E_D,LD_E_E,LD_E_H,LD_E_L,LD_E_xHL,LD_E_A,
-  LD_H_B,LD_H_C,LD_H_D,LD_H_E,LD_H_H,LD_H_L,LD_H_xHL,LD_H_A,
-  LD_L_B,LD_L_C,LD_L_D,LD_L_E,LD_L_H,LD_L_L,LD_L_xHL,LD_L_A,
-  LD_xHL_B,LD_xHL_C,LD_xHL_D,LD_xHL_E,LD_xHL_H,LD_xHL_L,HALT,LD_xHL_A,
-  LD_A_B,LD_A_C,LD_A_D,LD_A_E,LD_A_H,LD_A_L,LD_A_xHL,LD_A_A,
-  ADD_B,ADD_C,ADD_D,ADD_E,ADD_H,ADD_L,ADD_xHL,ADD_A,
-  ADC_B,ADC_C,ADC_D,ADC_E,ADC_H,ADC_L,ADC_xHL,ADC_A,
-  SUB_B,SUB_C,SUB_D,SUB_E,SUB_H,SUB_L,SUB_xHL,SUB_A,
-  SBC_B,SBC_C,SBC_D,SBC_E,SBC_H,SBC_L,SBC_xHL,SBC_A,
-  AND_B,AND_C,AND_D,AND_E,AND_H,AND_L,AND_xHL,AND_A,
-  XOR_B,XOR_C,XOR_D,XOR_E,XOR_H,XOR_L,XOR_xHL,XOR_A,
-  OR_B,OR_C,OR_D,OR_E,OR_H,OR_L,OR_xHL,OR_A,
-  CP_B,CP_C,CP_D,CP_E,CP_H,CP_L,CP_xHL,CP_A,
-  RET_NZ,POP_BC,JP_NZ,JP,CALL_NZ,PUSH_BC,ADD_BYTE,RST00,
-  RET_Z,RET,JP_Z,PFX_CB,CALL_Z,CALL,ADC_BYTE,RST08,
-  RET_NC,POP_DE,JP_NC,OUTA,CALL_NC,PUSH_DE,SUB_BYTE,RST10,
-  RET_C,EXX,JP_C,INA,CALL_C,PFX_DD,SBC_BYTE,RST18,
-  RET_PO,POP_HL,JP_PO,EX_HL_xSP,CALL_PO,PUSH_HL,AND_BYTE,RST20,
-  RET_PE,LD_PC_HL,JP_PE,EX_DE_HL,CALL_PE,PFX_ED,XOR_BYTE,RST28,
-  RET_P,POP_AF,JP_P,DI,CALL_P,PUSH_AF,OR_BYTE,RST30,
-  RET_M,LD_SP_HL,JP_M,EI,CALL_M,PFX_FD,CP_BYTE,RST38
-};
-
-enum CodesCB
-{
-  RLC_B,RLC_C,RLC_D,RLC_E,RLC_H,RLC_L,RLC_xHL,RLC_A,
-  RRC_B,RRC_C,RRC_D,RRC_E,RRC_H,RRC_L,RRC_xHL,RRC_A,
-  RL_B,RL_C,RL_D,RL_E,RL_H,RL_L,RL_xHL,RL_A,
-  RR_B,RR_C,RR_D,RR_E,RR_H,RR_L,RR_xHL,RR_A,
-  SLA_B,SLA_C,SLA_D,SLA_E,SLA_H,SLA_L,SLA_xHL,SLA_A,
-  SRA_B,SRA_C,SRA_D,SRA_E,SRA_H,SRA_L,SRA_xHL,SRA_A,
-  SLL_B,SLL_C,SLL_D,SLL_E,SLL_H,SLL_L,SLL_xHL,SLL_A,
-  SRL_B,SRL_C,SRL_D,SRL_E,SRL_H,SRL_L,SRL_xHL,SRL_A,
-  BIT0_B,BIT0_C,BIT0_D,BIT0_E,BIT0_H,BIT0_L,BIT0_xHL,BIT0_A,
-  BIT1_B,BIT1_C,BIT1_D,BIT1_E,BIT1_H,BIT1_L,BIT1_xHL,BIT1_A,
-  BIT2_B,BIT2_C,BIT2_D,BIT2_E,BIT2_H,BIT2_L,BIT2_xHL,BIT2_A,
-  BIT3_B,BIT3_C,BIT3_D,BIT3_E,BIT3_H,BIT3_L,BIT3_xHL,BIT3_A,
-  BIT4_B,BIT4_C,BIT4_D,BIT4_E,BIT4_H,BIT4_L,BIT4_xHL,BIT4_A,
-  BIT5_B,BIT5_C,BIT5_D,BIT5_E,BIT5_H,BIT5_L,BIT5_xHL,BIT5_A,
-  BIT6_B,BIT6_C,BIT6_D,BIT6_E,BIT6_H,BIT6_L,BIT6_xHL,BIT6_A,
-  BIT7_B,BIT7_C,BIT7_D,BIT7_E,BIT7_H,BIT7_L,BIT7_xHL,BIT7_A,
-  RES0_B,RES0_C,RES0_D,RES0_E,RES0_H,RES0_L,RES0_xHL,RES0_A,
-  RES1_B,RES1_C,RES1_D,RES1_E,RES1_H,RES1_L,RES1_xHL,RES1_A,
-  RES2_B,RES2_C,RES2_D,RES2_E,RES2_H,RES2_L,RES2_xHL,RES2_A,
-  RES3_B,RES3_C,RES3_D,RES3_E,RES3_H,RES3_L,RES3_xHL,RES3_A,
-  RES4_B,RES4_C,RES4_D,RES4_E,RES4_H,RES4_L,RES4_xHL,RES4_A,
-  RES5_B,RES5_C,RES5_D,RES5_E,RES5_H,RES5_L,RES5_xHL,RES5_A,
-  RES6_B,RES6_C,RES6_D,RES6_E,RES6_H,RES6_L,RES6_xHL,RES6_A,
-  RES7_B,RES7_C,RES7_D,RES7_E,RES7_H,RES7_L,RES7_xHL,RES7_A,  
-  SET0_B,SET0_C,SET0_D,SET0_E,SET0_H,SET0_L,SET0_xHL,SET0_A,
-  SET1_B,SET1_C,SET1_D,SET1_E,SET1_H,SET1_L,SET1_xHL,SET1_A,
-  SET2_B,SET2_C,SET2_D,SET2_E,SET2_H,SET2_L,SET2_xHL,SET2_A,
-  SET3_B,SET3_C,SET3_D,SET3_E,SET3_H,SET3_L,SET3_xHL,SET3_A,
-  SET4_B,SET4_C,SET4_D,SET4_E,SET4_H,SET4_L,SET4_xHL,SET4_A,
-  SET5_B,SET5_C,SET5_D,SET5_E,SET5_H,SET5_L,SET5_xHL,SET5_A,
-  SET6_B,SET6_C,SET6_D,SET6_E,SET6_H,SET6_L,SET6_xHL,SET6_A,
-  SET7_B,SET7_C,SET7_D,SET7_E,SET7_H,SET7_L,SET7_xHL,SET7_A
-};
+  int retval=0;
+  while(1)
+  {
+    /* this *has* to be checked before radjust is incr'd */
+    if(intsample && !(radjust&64))
+      intpend=1;
   
-enum CodesED
-{
-  DB_00,DB_01,DB_02,DB_03,DB_04,DB_05,DB_06,DB_07,
-  DB_08,DB_09,DB_0A,DB_0B,DB_0C,DB_0D,DB_0E,DB_0F,
-  DB_10,DB_11,DB_12,DB_13,DB_14,DB_15,DB_16,DB_17,
-  DB_18,DB_19,DB_1A,DB_1B,DB_1C,DB_1D,DB_1E,DB_1F,
-  DB_20,DB_21,DB_22,DB_23,DB_24,DB_25,DB_26,DB_27,
-  DB_28,DB_29,DB_2A,DB_2B,DB_2C,DB_2D,DB_2E,DB_2F,
-  DB_30,DB_31,DB_32,DB_33,DB_34,DB_35,DB_36,DB_37,
-  DB_38,DB_39,DB_3A,DB_3B,DB_3C,DB_3D,DB_3E,DB_3F,
-  IN_B_xC,OUT_xC_B,SBC_HL_BC,LD_xWORDe_BC,NEG,RETN,IM_0,LD_I_A,
-  IN_C_xC,OUT_xC_C,ADC_HL_BC,LD_BC_xWORDe,DB_4C,RETI,DB_,LD_R_A,
-  IN_D_xC,OUT_xC_D,SBC_HL_DE,LD_xWORDe_DE,DB_54,DB_55,IM_1,LD_A_I,
-  IN_E_xC,OUT_xC_E,ADC_HL_DE,LD_DE_xWORDe,DB_5C,DB_5D,IM_2,LD_A_R,
-  IN_H_xC,OUT_xC_H,SBC_HL_HL,LD_xWORDe_HL,DB_64,DB_65,DB_66,RRD,
-  IN_L_xC,OUT_xC_L,ADC_HL_HL,LD_HL_xWORDe,DB_6C,DB_6D,DB_6E,RLD,
-  IN_F_xC,DB_71,SBC_HL_SP,LD_xWORDe_SP,DB_74,DB_75,DB_76,DB_77,
-  IN_A_xC,OUT_xC_A,ADC_HL_SP,LD_SP_xWORDe,DB_7C,DB_7D,DB_7E,DB_7F,
-  DB_80,DB_81,DB_82,DB_83,DB_84,DB_85,DB_86,DB_87,
-  DB_88,DB_89,DB_8A,DB_8B,DB_8C,DB_8D,DB_8E,DB_8F,
-  DB_90,DB_91,DB_92,DB_93,DB_94,DB_95,DB_96,DB_97,
-  DB_98,DB_99,DB_9A,DB_9B,DB_9C,DB_9D,DB_9E,DB_9F,
-  LDI,CPI,INI,OUTI,DB_A4,DB_A5,DB_A6,DB_A7,
-  LDD,CPD,IND,OUTD,DB_AC,DB_AD,DB_AE,DB_AF,
-  LDIR,CPIR,INIR,OTIR,DB_B4,DB_B5,DB_B6,DB_B7,
-  LDDR,CPDR,INDR,OTDR,DB_BC,DB_BD,DB_BE,DB_BF,
-  DB_C0,DB_C1,DB_C2,DB_C3,DB_C4,DB_C5,DB_C6,DB_C7,
-  DB_C8,DB_C9,DB_CA,DB_CB,DB_CC,DB_CD,DB_CE,DB_CF,
-  DB_D0,DB_D1,DB_D2,DB_D3,DB_D4,DB_D5,DB_D6,DB_D7,
-  DB_D8,DB_D9,DB_DA,DB_DB,DB_DC,DB_DD,DB_DE,DB_DF,
-  DB_E0,DB_E1,DB_E2,DB_E3,DB_E4,DB_E5,DB_E6,DB_E7,
-  DB_E8,DB_E9,DB_EA,DB_EB,DB_EC,DB_ED,DB_EE,DB_EF,
-  DB_F0,DB_F1,DB_F2,DB_F3,DB_F4,DB_F5,DB_F6,DB_F7,
-  DB_F8,DB_F9,DB_FA,DB_FB,DB_FC,DB_FD,DB_FE,DB_FF
-};
-
-static void CodesCB(register Z80 *R)
-{
-  register byte I;
-
-  I=OpZ80(R->PC.W++);
-  R->ICount-=CyclesCB[I];
-  switch(I)
-  {
-#include "CodesCB.h"
-    default:
-      if(R->TrapBadOps)
-        printf
-        (   
-          "[Z80 %lX] Unrecognized instruction: CB %02X at PC=%04X\n",
-          (long)(R->User),OpZ80(R->PC.W-1),R->PC.W-2
-        );
-  }
-}
-
-static void CodesDDCB(register Z80 *R)
-{
-  register pair J;
-  register byte I;
-
-#define XX IX    
-  J.W=R->XX.W+(offset)OpZ80(R->PC.W++);
-  I=OpZ80(R->PC.W++);
-  R->ICount-=CyclesXXCB[I];
-  switch(I)
-  {
-#include "CodesXCB.h"
-    default:
-      if(R->TrapBadOps)
-        printf
-        (
-          "[Z80 %lX] Unrecognized instruction: DD CB %02X %02X at PC=%04X\n",
-          (long)(R->User),OpZ80(R->PC.W-2),OpZ80(R->PC.W-1),R->PC.W-4
-        );
-  }
-#undef XX
-}
-
-static void CodesFDCB(register Z80 *R)
-{
-  register pair J;
-  register byte I;
-
-#define XX IY
-  J.W=R->XX.W+(offset)OpZ80(R->PC.W++);
-  I=OpZ80(R->PC.W++);
-  R->ICount-=CyclesXXCB[I];
-  switch(I)
-  {
-#include "CodesXCB.h"
-    default:
-      if(R->TrapBadOps)
-        printf
-        (
-          "[Z80 %lX] Unrecognized instruction: FD CB %02X %02X at PC=%04X\n",
-          (long)R->User,OpZ80(R->PC.W-2),OpZ80(R->PC.W-1),R->PC.W-4
-        );
-  }
-#undef XX
-}
-
-static void CodesED(register Z80 *R)
-{
-  register byte I;
-  register pair J;
-
-  I=OpZ80(R->PC.W++);
-  R->ICount-=CyclesED[I];
-  switch(I)
-  {
-#include "CodesED.h"
-    case PFX_ED:
-      R->PC.W--;break;
-    default:
-      if(R->TrapBadOps)
-        printf
-        (
-          "[Z80 %lX] Unrecognized instruction: ED %02X at PC=%04X\n",
-          (long)R->User,OpZ80(R->PC.W-1),R->PC.W-2
-        );
-  }
-}
-
-static void CodesDD(register Z80 *R)
-{
-  register byte I;
-  register pair J;
-
-#define XX IX
-  I=OpZ80(R->PC.W++);
-  R->ICount-=CyclesXX[I];
-  switch(I)
-  {
-#include "CodesXX.h"
-    case PFX_FD:
-    case PFX_DD:
-      R->PC.W--;break;
-    case PFX_CB:
-      CodesDDCB(R);break;
-    default:
-      if(R->TrapBadOps)
-        printf
-        (
-          "[Z80 %lX] Unrecognized instruction: DD %02X at PC=%04X\n",
-          (long)R->User,OpZ80(R->PC.W-1),R->PC.W-2
-        );
-  }
-#undef XX
-}
-
-static void CodesFD(register Z80 *R)
-{
-  register byte I;
-  register pair J;
-
-#define XX IY
-  I=OpZ80(R->PC.W++);
-  R->ICount-=CyclesXX[I];
-  switch(I)
-  {
-#include "CodesXX.h"
-    case PFX_FD:
-    case PFX_DD:
-      R->PC.W--;break;
-    case PFX_CB:
-      CodesFDCB(R);break;
-    default:
-        printf
-        (
-          "Unrecognized instruction: FD %02X at PC=%04X\n",
-          OpZ80(R->PC.W-1),R->PC.W-2
-        );
-  }
-#undef XX
-}
-
-/** ResetZ80() ***********************************************/
-/** This function can be used to reset the register struct  **/
-/** before starting execution with Z80(). It sets the       **/
-/** registers to their supposed initial values.             **/
-/*************************************************************/
-void ResetZ80(Z80 *R, register int Cycles)
-{
-  R->IPeriod  = Cycles;
-  R->PC.W     = 0x0000;
-  R->SP.W     = 0xF000;
-  R->AF.W     = 0x0000;
-  R->BC.W     = 0x0000;
-  R->DE.W     = 0x0000;
-  R->HL.W     = 0x0000;
-  R->AF1.W    = 0x0000;
-  R->BC1.W    = 0x0000;
-  R->DE1.W    = 0x0000;
-  R->HL1.W    = 0x0000;
-  R->IX.W     = 0x0000;
-  R->IY.W     = 0x0000;
-  R->I        = 0x00;
-  R->R        = 0x00;
-  R->IFF      = 0x00;
-  R->ICount   = R->IPeriod;
-  R->IRequest = INT_NONE;
-  R->IBackup  = 0;
-
-  JumpZ80(R->PC.W);
-}
-
-/** ExecZ80() ************************************************/
-/** This function will execute given number of Z80 cycles.  **/
-/** It will then return the number of cycles left, possibly **/
-/** negative, and current register values in R.             **/
-/*************************************************************/
-#ifdef EXECZ80
-int ExecZ80(register Z80 *R,register int RunCycles)
-{
-  register byte I;
-  register pair J;
-
-  for(R->ICount=RunCycles;;)
-  {
-    while(R->ICount>0)
+    ixoriy=new_ixoriy;
+    new_ixoriy=0;
+    intsample=1;
+    op=fetch(pc&0x7fff);
+    if((pc&0x8000) && !(op&64))
     {
-#ifdef DEBUG
-      /* Turn tracing on when reached trap address */
-      if(R->PC.W==R->Trap) R->Trace=1;
-      /* Call single-step debugger, exit if requested */
-      if(R->Trace)
-        if(!DebugZ80(R)) return(R->ICount);
-#endif
-
-      /* Read opcode and count cycles */
-      I=OpZ80(R->PC.W++);
-      /* Count cycles */
-      R->ICount-=Cycles[I];
-
-      /* Interpret opcode */
-      switch(I)
+      int x,y,v;
+    
+      /* do the ULA's char-generating stuff */
+      x=LINEX;
+      y=liney;
+      if(y>=0 && y<ZX_VID_FULLHEIGHT && x>=0 && x<ZX_VID_FULLWIDTH/8)
       {
-#include "Codes.h"
-        case PFX_CB: CodesCB(R);break;
-        case PFX_ED: CodesED(R);break;
-        case PFX_FD: CodesFD(R);break;
-        case PFX_DD: CodesDD(R);break;
+        /* XXX I think this is what's needed for the `true hi-res'
+         * stuff from the ULA's side, but the timing is messed up
+         * at the moment so not worth it currently.
+         */
+        v=mem[((i&0xfe)<<8)|((op&63)<<3)|ulacharline];
+        scrnbmp_new[y*(ZX_VID_FULLWIDTH/8)+x]=((op&128)?~v:v);
       }
+    
+      op=0;	/* the CPU sees a nop */
     }
 
-    /* Unless we have come here after EI, exit */
-    if(!(R->IFF&IFF_EI)) return(R->ICount);
-    else
+    pc++;
+    radjust++;
+  
+    switch(op)
     {
-      /* Done with AfterEI state */
-      R->IFF=(R->IFF&~IFF_EI)|IFF_1;
-      /* Restore the ICount */
-      R->ICount+=R->IBackup-1;
-      /* Interrupt CPU if needed */
-      if((R->IRequest!=INT_NONE)&&(R->IRequest!=INT_QUIT)) IntZ80(R,R->IRequest);
+#include "z80ops.h"
     }
-  }
-}
-#endif /* EXECZ80 */
-
-/** IntZ80() *************************************************/
-/** This function will generate interrupt of given vector.  **/
-/*************************************************************/
-void IntZ80(Z80 *R,word Vector)
-{
-  /* If HALTed, take CPU off HALT instruction */
-  if(R->IFF&IFF_HALT) { R->PC.W++;R->IFF&=~IFF_HALT; }
-
-  if((R->IFF&IFF_1)||(Vector==INT_NMI))
-  {
-    /* Save PC on stack */
-    M_PUSH(PC);
-
-    /* Automatically reset IRequest if needed */
-    if(R->IAutoReset&&(Vector==R->IRequest)) R->IRequest=INT_NONE;
-
-    /* If it is NMI... */
-    if(Vector==INT_NMI)
+  
+    if(tstates>=tsmax)
     {
-      /* Clear IFF1 */
-      R->IFF&=~(IFF_1|IFF_EI);
-      /* Jump to hardwired NMI vector */
-      R->PC.W=0x0066;
-      JumpZ80(0x0066);
-      /* Done */
-      return;
+      retval=1;   
+      tstates-=tsmax;
+      linestart-=tsmax;
+      nextlinetime-=tsmax;
+      lastvsyncpend-=tsmax;
+      vsync_lasttoggle=vsync_toggle;
+      vsync_toggle=0;
+    
+      frames++;
+      frame_pause();
     }
 
-    /* Further interrupts off */
-    R->IFF&=~(IFF_1|IFF_2|IFF_EI);
-
-    /* If in IM2 mode... */
-    if(R->IFF&IFF_IM2)
+    /* the vsync length test is pretty arbitrary, because
+     * the timing isn't very accurate (more or less an instruction
+     * count) - but it's good enough in practice.
+     *
+     * the vsync_toggle test is fairly arbitrary too;
+     * there has to have been `not too many' for a TV to get
+     * confused. In practice, more than one would screw it up,
+     * but since we could be looking at over a frames' worth
+     * given where vsync_toggle is zeroed, we play it safe.
+     * also, we use a copy of the previous chunk's worth,
+     * since we need a full frame(-plus) to decide this.
+     */
+    if(vsynclen && !vsync)
     {
-      /* Make up the vector address */
-      Vector=(Vector&0xFF)|((word)(R->I)<<8);
-      /* Read the vector */
-      R->PC.B.l=RdZ80(Vector++);
-      R->PC.B.h=RdZ80(Vector);
-      JumpZ80(R->PC.W);
-      /* Done */
-      return;
-    }
-
-    /* If in IM1 mode, just jump to hardwired IRQ vector */
-    if(R->IFF&IFF_IM1) { R->PC.W=0x0038;JumpZ80(0x0038);return; }
-
-    /* If in IM0 mode... */
-
-    /* Jump to a vector */
-    switch(Vector)
-    {
-      case INT_RST00: R->PC.W=0x0000;JumpZ80(0x0000);break;
-      case INT_RST08: R->PC.W=0x0008;JumpZ80(0x0008);break;
-      case INT_RST10: R->PC.W=0x0010;JumpZ80(0x0010);break;
-      case INT_RST18: R->PC.W=0x0018;JumpZ80(0x0018);break;
-      case INT_RST20: R->PC.W=0x0020;JumpZ80(0x0020);break;
-      case INT_RST28: R->PC.W=0x0028;JumpZ80(0x0028);break;
-      case INT_RST30: R->PC.W=0x0030;JumpZ80(0x0030);break;
-      case INT_RST38: R->PC.W=0x0038;JumpZ80(0x0038);break;
-    }
-  }
-}
-
-/** RunZ80() *************************************************/
-/** This function will run Z80 code until an LoopZ80() call **/
-/** returns INT_QUIT. It will return the PC at which        **/
-/** emulation stopped, and current register values in R.    **/
-/*************************************************************/
-#ifndef EXECZ80
-word RunZ80(Z80 *R)
-{
-  register byte I;
-  register pair J;
-
-  for(;;)
-  {
-#ifdef DEBUG
-    /* Turn tracing on when reached trap address */
-    if(R->PC.W==R->Trap) R->Trace=1;
-    /* Call single-step debugger, exit if requested */
-    if(R->Trace)
-      if(!DebugZ80(R)) return(R->PC.W);
-#endif
-
-    I=OpZ80(R->PC.W++);
-    R->ICount-=Cycles[I];
-
-    switch(I)
-    {
-#include "Codes.h"
-      case PFX_CB: CodesCB(R);break;
-      case PFX_ED: CodesED(R);break;
-      case PFX_FD: CodesFD(R);break;
-      case PFX_DD: CodesDD(R);break;
-    }
- 
-    /* If cycle counter expired... */
-    if(R->ICount<=0)
-    {
-      /* If we have come after EI, get address from IRequest */
-      /* Otherwise, get it from the loop handler             */
-      if(R->IFF&IFF_EI)
+      if(vsynclen>=10)
       {
-        R->IFF=(R->IFF&~IFF_EI)|IFF_1; /* Done with AfterEI state */
-        R->ICount+=R->IBackup-1;       /* Restore the ICount      */
-
-        /* Call periodic handler or set pending IRQ */
-        if(R->ICount>0) J.W=R->IRequest;
-        else
+        if(vsync_lasttoggle<=2)
         {
-          J.W=LoopZ80(R);        /* Call periodic handler    */
-          R->ICount+=R->IPeriod; /* Reset the cycle counter  */
-          if(J.W==INT_NONE) J.W=R->IRequest;  /* Pending IRQ */
+          vsyncpend=1;	/* start of frame */
+          /* FAST mode screws up without this, but it's a bit
+           * unpleasant... :-/
+           */
+          tstates=nextlinetime;
         }
       }
       else
       {
-        J.W=LoopZ80(R);          /* Call periodic handler    */
-        R->ICount+=R->IPeriod;   /* Reset the cycle counter  */
-        if(J.W==INT_NONE) J.W=R->IRequest;    /* Pending IRQ */
+        /* independent timing for this would be awkward, so
+         * anywhere on the line is good enough. Also,
+         * don't count it as a toggle.
+         */
+        vsync_toggle--;
+        hsyncskip=1;
       }
-
-      if(J.W==INT_QUIT) return(R->PC.W); /* Exit if INT_QUIT */
-      if(J.W!=INT_NONE) IntZ80(R,J.W);   /* Int-pt if needed */
     }
+
+    /* should do this all the time vsync is set */
+    if(vsync)
+    {
+      ulacharline=0;
+      vsynclen++;
+    }
+    else {
+      vsynclen=0;    
+    }
+  
+    if(tstates>=nextlinetime)	/* new line */
+    {
+      /* generate fake sync if we haven't had one for a while;
+       * but if we just loaded/saved, wait for the first real frame instead
+       * to avoid jumpiness.
+       */
+      if(!vsync && tstates-lastvsyncpend>=tsmax && !framewait)
+        vsyncpend=1;
+  
+      /* but that won't ever happen if we always have vsync on -
+       * i.e., if we're grinding away in FAST mode. So for that
+       * case, we check for vsync being held for a full frame.
+       */
+      if(vsync_visuals && vsynclen>=tsmax)
+      {
+        vsyncpend=1;
+        vsynclen=1;      
+        goto postcopy;				/* skip the usual copying */
+      }
+  
+      if(!vsyncpend)
+      {
+        liney++;
+        
+        if(hsyncgen && !hsyncskip)
+        {
+          ulacharline++;
+          ulacharline&=7;
+        }
+      }
+      else
+      {
+        bitbufBlit(scrnbmp_new);
+        postcopy:
+        memset(scrnbmp_new,0,sizeof(scrnbmp_new));
+        lastvsyncpend=tstates;
+        vsyncpend=0;
+        framewait=0;
+        liney=-1;		/* XXX might be something up here */
+      }
+      
+      if(nmigen)
+        nmipend=1;
+  
+      hsyncskip=0;
+      linestart=nextlinetime;
+      nextlinetime+=linegap;
+    }
+  
+    if(intsample && nmipend)
+    {
+      nmipend=0;
+  
+      if(nmigen)
+      {
+        iff2=iff1;
+        iff1=0;
+        /* hardware syncs tstates to falling of NMI pulse (?),
+         * so a slight kludge here...
+         */
+        if(fetch(pc&0x7fff)==0x76)
+        {
+          pc++;
+          tstates=linestart;
+        }
+        else
+        {
+          /* this seems curiously long, but equally, seems
+           * to be just about right. :-)
+           */
+          tstates+=27;
+        }
+        push2(pc);
+        pc=0x66;
+      }
+    }
+
+    if(intsample && intpend)
+    {
+      intpend=0;
+      if(iff1)
+      {
+        if(fetch(pc&0x7fff)==0x76)pc++;
+        iff1=iff2=0;
+        tstates+=5; /* accompanied by an input from the data bus */
+        switch(im)
+        {
+          case 0: /* IM 0 */
+          case 1: /* undocumented */
+          case 2: /* IM 1 */
+            /* there is little to distinguish between these cases */
+            tstates+=9; /* perhaps */
+            push2(pc);
+            pc=0x38;
+            break;
+          case 3: /* IM 2 */
+            /* (seems unlikely it'd ever be used on the '81, but...) */
+            tstates+=13; /* perhaps */
+            {
+              int addr=fetch2((i<<8)|0xff);
+              push2(pc);
+              pc=addr;
+            }
+        }
+      }
+    }
+
+    /* this isn't used for any sort of Z80 interrupts,
+     * purely for the emulator's UI.
+     */
+    if(interrupted)
+    {
+      if(interrupted==1)
+      {
+        do_interrupt();	/* also zeroes it */
+      }
+      else	/* must be 2 */
+      {
+        /* a kludge to let us do a reset */
+        interrupted=0;
+        a=f=b=c=d=e=h=l=a1=f1=b1=c1=d1=e1=h1=l1=i=iff1=iff2=im=r=0;
+        ixoriy=new_ixoriy=0;
+        ix=iy=sp=pc=0;
+        tstates=radjust=0;
+        nextlinetime=linegap;
+        vsyncpend=vsynclen=0;
+        hsyncskip=0;
+      }
+    }
+    
+    if (retval) break;  
   }
 
-  /* Execution stopped */
-  return(R->PC.W);
 }
-#endif /* !EXECZ80 */
