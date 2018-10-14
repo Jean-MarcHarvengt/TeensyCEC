@@ -45,7 +45,7 @@
             f=(a&0xa8)|((!a)<<6)|(((a&15)>0)<<4)|((a==128)<<2)|2|(a>0))
 
 {
-   unsigned char op=fetch(pc);
+   unsigned char op=fetch(pc&0x7fff);
    pc++;
    radjust++;
    switch(op){
@@ -508,12 +508,34 @@ endinstr;
 /* save/load patches */
 
 instr(0xfc,4);
+#ifdef SZ81	/* Added by Thunor */
+  if(!zx80 && hl < 0x8000)
+    {
+    sdl_load_file(hl,LOAD_FILE_METHOD_NAMEDLOAD);
+    }
+  else /* if((!zx80 && hl >= 0x8000) || zx80) */
+    {
+    sdl_load_file(hl,LOAD_FILE_METHOD_SELECTLOAD);
+    }
+#else
   load_p(hl);
+#endif
   framewait=1;
 endinstr;
 
 instr(0xfd,4);
+#ifdef SZ81	/* Added by Thunor */
+  if(zx80)
+    {
+    sdl_save_file(hl,SAVE_FILE_METHOD_UNNAMEDSAVE);
+    }
+  else
+    {
+    sdl_save_file(hl,SAVE_FILE_METHOD_NAMEDSAVE);
+    }
+#else
   save_p(hl);
+#endif
   framewait=1;
 endinstr;
 
