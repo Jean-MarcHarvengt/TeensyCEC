@@ -364,14 +364,33 @@ int handleMenu(uint16_t bClick)
       menuRedraw=true;
       action = ACTION_RUNVGA;    
   }
-  else if ( (bClick & MASK_JOY2_UP) || (c == MKEY_UP) ) {
+  else if (bClick & MASK_JOY2_UP) {
     if (curFile!=0) {
       menuRedraw=true;
       curFile--;
     }
   }
-  else if ( (bClick & MASK_JOY2_DOWN) || (c == MKEY_DOWN) ) {
+  else if (c == MKEY_UP) {
+    if ((curFile-9)>=0) {
+      menuRedraw=true;
+      curFile -= 9;
+    } else if (curFile!=0) {
+      menuRedraw=true;
+      curFile--;
+    }
+  }  
+  else if (bClick & MASK_JOY2_DOWN)  {
     if ((curFile<(nbFiles-1)) && (nbFiles)) {
+      curFile++;
+      menuRedraw=true;
+    }
+  }
+  else if (c == MKEY_DOWN) {
+    if ((curFile<(nbFiles-9)) && (nbFiles)) {
+      curFile += 9;
+      menuRedraw=true;
+    }
+    else if ((curFile<(nbFiles-1)) && (nbFiles)) {
       curFile++;
       menuRedraw=true;
     }

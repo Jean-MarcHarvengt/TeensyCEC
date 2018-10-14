@@ -9,18 +9,14 @@
 
 static AY8910 ay;
 byte mem[ 65536 ];
-#ifdef ALT_Z80CORE
 unsigned char *memptr[64];
 int memattr[64];
 int unexpanded=0;
 int nmigen=0,hsyncgen=0,vsync=0;
 int vsync_visuals=0;
-volatile int signal_int_flag=0;
-unsigned char *iptr=mem;
+int signal_int_flag=0;
 int interrupted=0;
-#else
-static Z80 z80;
-#endif
+int ramsize=32; //32;
 
 /* the keyboard state and other */
 static byte keyboard[ 9 ] = {0xff,0xff,0xff,0xff, 0xff,0xff,0xff,0xff, 0xff};;
@@ -53,59 +49,7 @@ static int timeout=100;
 
 
 
-void WrZ80(register word Addr,register byte Value)
-{
-  /* don't write to rom */
-  if ( Addr >= 0x4000 )
-  {
-    mem[ Addr ] = Value;
-  }
-}
-
-byte RdZ80(register word Addr)
-{
-  return mem[ Addr ];  
-}
-
-void OutZ80(register word Port,register byte Value)
-{
-}
-
-byte InZ80(register word port)
-{
-  byte h = port >> 8;
-  byte l = port & 0xff;
-  
-  if(l==0xfe) { /* keyboard */
-    switch(h)
-    {
-      case 0xfe:  return(keyboard[0]);
-      case 0xfd:  return(keyboard[1]);
-      case 0xfb:  return(keyboard[2]);
-      case 0xf7:  return(keyboard[3]);
-      case 0xef:  return(keyboard[4]);
-      case 0xdf:  return(keyboard[5]);
-      case 0xbf:  return(keyboard[6]);
-      case 0x7f:  return(keyboard[7]);
-      default:  return(255);
-    }    
-  }
-  return(255);
-}
-
-
-#ifdef ALT_Z80CORE
-#else
-void PatchZ80(register Z80 *R)
-{
-  // nothing to do
-}
-
-#endif
-
-
 unsigned int in(int h, int l)
-
 {
 
   int ts=0;    /* additional cycles*256 */
@@ -205,6 +149,10 @@ unsigned int out(int h,int l,int a)
       return(ts/*|printer_inout(1,a)*/);
     case 0xfd:
       nmigen=0;
+      if(vsync)
+        vsync_lower();
+      vsync=0;
+      hsyncgen=1;
       break;
     case 0xfe:
       if(!zx80)
@@ -227,10 +175,6 @@ unsigned int out(int h,int l,int a)
 
 
 
-
-
-
-
 void sighandler(int a)
 {
   signal_int_flag=1;
@@ -250,10 +194,6 @@ void do_interrupt()
   if(interrupted==1)
     interrupted=0;
 }
-
-
-
-
 
 void bitbufBlit(unsigned char * buf)
 {
@@ -284,78 +224,6 @@ void bitbufBlit(unsigned char * buf)
     emu_DrawLine(&XBuf[0], WIDTH, HEIGHT, y);   
     buf += (ZX_VID_FULLWIDTH/8);
   }
-}
-
-
-static void displayScreen(void) {
-  int row,i,j,x,y=0;
-  byte * ptr;
-
-  ptr=mem+fetch2(16396);
-  /* since we can't just do "don't bother if it's junk" as we always
-   * need to draw a screen, just draw *valid* junk that won't result
-   * in a segfault or anything. :-)
-   */
-  if(ptr-mem<0 || ptr-mem>0xf000) ptr=mem+0xf000;
-  ptr++;  /* skip first HALT */
-  byte *charset = &zx81rom[0x1e00];
-  for ( row = 0; row < 24; row++ )
-  {
-    memset( XBuf, 1, WIDTH*8 );    
-    for ( x = 0; x < 32; x++ )
-    {
-      byte * dst=&XBuf[(x<<3)+BORDER];
-      byte c = *ptr++;
-      if (c<64) {
-        byte * ptr=&charset[(int)c<<3];
-        for (j=0;j<8;j++)
-        {
-          byte b = *ptr++;
-          for (i=0;i<8;i++)
-          {
-            if ( b & 128 )
-            {
-              *dst++=0;
-            }
-            else
-            {
-              *dst++=1;
-            }
-            b <<= 1;
-          }
-          dst+=(WIDTH-8);               
-        }       
-      }
-      else {
-        c &= 0x3F;
-        byte * ptr=&charset[(int)c<<3];
-        for (j=0;j<8;j++)
-        {
-          byte b = *ptr++;
-          for (i=0;i<8;i++)
-          {
-            if ( b & 128 )
-            {
-              *dst++=1;
-            }
-            else
-            {
-              *dst++=0;
-            }
-            b <<= 1;
-          }
-          dst+=(WIDTH-8);               
-        }       
-      }
-
-    }
-    for (j=0;j<8;j++)
-    {
-      emu_DrawLine(&XBuf[j*WIDTH], WIDTH, HEIGHT, y++);   
-    }
-    /* skip the 0x76 at the end of the line */
-    ptr++;
-  }      
 }
 
 static void updateKeyboard (void)
@@ -421,38 +289,28 @@ static void handleKeyBuf(void)
 void reset81()
 {
   interrupted=2;  /* will cause a reset */
-  memset(mem+16384,0,49152);
+  memset(mem+0x4000,0,0xc000);  
 }
 
 void load_p(int a)
 {
-  emu_printf("load");
-
+  emu_printf("loading...");
+/*
   int got_ascii_already=0;
-  if(zx80) {
-//    strcpy(fname,"zx80prog.p");    
+  if(zx80) {    
   }
   else
   {
-    if(a>=32768)   /* they did LOAD "" */
+    if(a>=32768)  
     {
       got_ascii_already=1;
       emu_printf("got ascii");
     } 
     if(!got_ascii_already)
     {
-      /* test for Xtender-style LOAD " STOP " to quit */
-      //if(*ptr==227) exit_program();    
-      //memset(fname,0,sizeof(fname));
-      //do
-      //  *dptr++=zx2ascii[(*ptr)&63];
-      //while((*ptr++)<128 && dptr<fname+sizeof(fname)-3);
-      /* add '.p' */
-      //strcat(fname,".p");
     }
   }
-    
-
+*/    
   emu_printf(tapename);
   if ( !emu_FileOpen(tapename) ) {
     /* the partial snap will crash without a file, so reset */
@@ -501,38 +359,21 @@ void zx80hacks()
   mem[0x208]=0xc3; mem[0x209]=0x83; mem[0x20a]=0x02;
 }
 
-
-void z81_Init(void) 
+static void initmem()
 {
-#if HAS_SND
-  emu_sndInit(); 
-#endif 
+  int f;
+  int count;
 
-  if (emu_ReadKeys() & MASK_KEY_USER2) setzx80mode(); 
-  
-  if (XBuf == 0) XBuf = (byte *)emu_Malloc(WIDTH*8);
-  /* Set up the palette */
-  int J;
-  for(J=0;J<2;J++)
-    emu_SetPaletteEntry(Palette[J].R,Palette[J].G,Palette[J].B, J);
-  
-  Reset8910(&ay,3500000,0);
-  
-  /* load rom with ghosting at 0x2000 */
   if(zx80)
   {
-    memcpy( mem + 0x0000, zx80rom, 0x1000  );    
-    memcpy(mem+0x1000*2,mem,0x1000*2);
+    memset(mem+0x1000,0,0xf000);
   }
-  else 
+else
   {
-    memcpy( mem + 0x0000, zx81rom, 0x2000  );
-    memset(mem+0x4000,0,0xc000);     
+    memset(mem+0x2000,0,0xe000);
   }
 
-  int f;
-  int ramsize;
-  int count;
+
   /* ROM setup */
   count=0;
   for(f=0;f<16;f++)
@@ -544,7 +385,6 @@ void z81_Init(void)
   }
 
   /* RAM setup */
-  ramsize=16;
   if(unexpanded)
     ramsize=1;
   count=0;
@@ -555,47 +395,149 @@ void z81_Init(void)
     count++;
     if(count>=ramsize) count=0;
   }
-   
+
+
+/* z81's ROM and RAM initialisation code is OK for <= 16K RAM but beyond
+ * that it requires a little tweaking.
+ * 
+ * The following diagram shows the ZX81 + 8K ROM. The ZX80 version is
+ * the same except that each 8K ROM region will contain two copies of
+ * the 4K ROM.
+ * 
+ * RAM less than 16K is mirrored throughout the 16K region.
+ * 
+ * The ROM will only detect up to 8000h when setting RAMTOP, therefore
+ * having more than 16K RAM will require RAMTOP to be set by the user
+ * (or user program) to either 49152 for 32K or 65535 for 48/56K.
+ * 
+ *           1K to 16K       32K           48K           56K      Extra Info.
+ * 
+ *  65535  +----------+  +----------+  +----------+  +----------+ 
+ * (FFFFh) | 16K RAM  |  | 16K RAM  |  | 16K RAM  |  | 16K RAM  | DFILE can be
+ *         | mirrored |  | mirrored |  |          |  |          | wholly here.
+ *         |          |  |          |  |          |  |          | 
+ *         |          |  |          |  |          |  |          | BASIC variables
+ *         |          |  |          |  |          |  |          | can go here.
+ *  49152  +----------+  +----------+  +----------+  +----------+ 
+ * (C000h) | 8K ROM   |  | 16K RAM  |  | 16K RAM  |  | 16K RAM  | BASIC program
+ *         | mirrored |  |          |  |          |  |          | is restricted
+ *  40960  +----------+  |          |  |          |  |          | to here.
+ * (A000h) | 8K ROM   |  |          |  |          |  |          | 
+ *         | mirrored |  |          |  |          |  |          | 
+ *  32768  +----------+  +----------+  +----------+  +----------+ 
+ * (8000h) | 16K RAM  |  | 16K RAM  |  | 16K RAM  |  | 16K RAM  | No machine code
+ *         |          |  |          |  |          |  |          | beyond here.
+ *         |          |  |          |  |          |  |          | 
+ *         |          |  |          |  |          |  |          | DFILE can be
+ *         |          |  |          |  |          |  |          | wholly here.
+ *  16384  +----------+  +----------+  +----------+  +----------+ 
+ * (4000h) | 8K ROM   |  | 8K ROM   |  | 8K ROM   |  | 8K RAM   | 
+ *         | mirrored |  | mirrored |  | mirrored |  |          | 
+ *   8192  +----------+  +----------+  +----------+  +----------+ 
+ * (2000h) | 8K ROM   |  | 8K ROM   |  | 8K ROM   |  | 8K ROM   | 
+ *         |          |  |          |  |          |  |          | 
+ *      0  +----------+  +----------+  +----------+  +----------+ 
+ */
+
+  switch(ramsize)
+  {
+    case 56:
+      for(f=8;f<16;f++)
+      {
+        memattr[f]=1;         /* It's now writable */
+        memptr[f]=mem+1024*f;
+      }
+    case 48:
+      for(f=48;f<64;f++)
+      {
+        memattr[f]=1;
+        memptr[f]=mem+1024*f;
+      }
+    case 32:
+      for(f=32;f<48;f++)
+      {
+        memattr[f]=1;
+        memptr[f]=mem+1024*f;
+      }
+      break;
+  }
+
   if(zx80)
     zx80hacks();
   else
     zx81hacks();
+}
 
+
+void z81_Init(void) 
+{
+#if HAS_SND
+  emu_sndInit(); 
+#endif 
   
-  /* patch DISPLAY-5 to a return */
-  //mem[ 0x02b5 + 0x0000 ] = 0xc9;
-  //memcpy( mem + 0x2000, mem, 0x2000 );
-
+  if (XBuf == 0) XBuf = (byte *)emu_Malloc(WIDTH*8);
+  /* Set up the palette */
+  int J;
+  for(J=0;J<2;J++)
+    emu_SetPaletteEntry(Palette[J].R,Palette[J].G,Palette[J].B, J);
+  
+  Reset8910(&ay,3500000,0);
+  
+  /* load rom with ghosting at 0x2000 */
+  int siz=(zx80?4096:8192);  
+  if(zx80)
+  {
+    memcpy( mem + 0x0000, zx80rom, siz );    
+  }
+  else 
+  {
+    memcpy( mem + 0x0000, zx81rom, siz );   
+  }
+  memcpy(mem+siz,mem,siz);
+  if(zx80)
+    memcpy(mem+siz*2,mem,siz*2);
+    
+  initmem();
+ 
   /* reset the keyboard state */
   memset( keyboard, 255, sizeof( keyboard ) );  
-  
-#ifdef ALT_Z80CORE
-  ResetZ80();
-#else
-  ResetZ80(&z80, CYCLES_PER_FRAME);
-#endif 
- }
 
+  ResetZ80();
+ }
 
 
 void z81_Step(void)
 {
-#ifdef ALT_Z80CORE 
   ExecZ80();
   sighandler(0);
-#else
-  ExecZ80(&z80,CYCLES_PER_FRAME); // 3.5MHz ticks for 6 lines @ 30 kHz = 700 cycles
-  IntZ80(&z80,INT_IRQ); // must be called every 20ms
-  displayScreen();
-  if (strlen(tapename)) handleKeyBuf();  
-#endif  
+  //if (strlen(tapename)) handleKeyBuf();  
   emu_DrawVsync(); 
   updateKeyboard();
   Loop8910(&ay,20);     
 }
 
+static int endsWith(const char * s, const char * suffix)
+{
+  int retval = 0;
+  int len = strlen(s);
+  int slen = strlen(suffix);
+  if (len > slen ) {
+    if (!strcmp(&s[len-slen], suffix)) {
+      retval = 1;
+    }
+  }
+   return (retval);  
+}
 
 void z81_Start(char * filename)
 {
   strncpy(tapename,filename,64);
+  if ( (endsWith(filename, ".80")) || (endsWith(filename, ".o")) )  {
+    autoload = 1;
+    zx80=1;
+    ramsize=48;
+  }
+  else if (endsWith(filename, ".56") ) {
+    ramsize = 56;
+  }
 }

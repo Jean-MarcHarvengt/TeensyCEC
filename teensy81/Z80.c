@@ -49,19 +49,16 @@ unsigned long tstates=0,tsmax=65000,frames=0;
 unsigned char scrnbmp_new[ZX_VID_FULLWIDTH*ZX_VID_FULLHEIGHT/8]; /* written */
 
 /* checked against for diffs */
-static int liney=0;
-static int vsy=0;
-static unsigned long linestart=0;
-static int vsync_toggle=0,vsync_lasttoggle=0;
+int liney=0, lineyi=0;
+int vsy=0;
+unsigned long linestart=0;
+int vsync_toggle=0,vsync_lasttoggle=0;
 
+static int linestate=0, linex=0, nrmvideo=1;
 
 #define LINEX 	((tstates-linestart)>>2)
 
 
-void setzx80mode(void) {
-  autoload = 0;
-  zx80=1;
-}
 
 /* for vsync off -> on */
 void vsync_raise(void)
@@ -70,19 +67,20 @@ void vsync_raise(void)
   vsy=liney;
 }
 
+
 /* for vsync on -> off */
 void vsync_lower(void)
 {
   int ny=liney,y;
-
+  
   vsync_toggle++;
-
+  
   /* we don't emulate this stuff by default; if nothing else,
    * it can be fscking annoying when you're typing in a program.
    */
   if(!vsync_visuals)
     return;
-
+  
   /* even when we do emulate it, we don't bother with x timing,
    * just the y. It gives reasonable results without being too
    * complicated, I think.
@@ -91,16 +89,16 @@ void vsync_lower(void)
   if(vsy>=ZX_VID_FULLHEIGHT) vsy=ZX_VID_FULLHEIGHT-1;
   if(ny<0) ny=0;
   if(ny>=ZX_VID_FULLHEIGHT) ny=ZX_VID_FULLHEIGHT-1;
-
+  
   /* XXX both of these could/should be made into single memset calls */
   if(ny<vsy)
-  {
+    {
     /* must be wrapping around a frame edge; do bottom half */
     for(y=vsy;y<ZX_VID_FULLHEIGHT;y++)
       memset(scrnbmp_new+y*(ZX_VID_FULLWIDTH/8),0xff,ZX_VID_FULLWIDTH/8);
     vsy=0;
-  }
-
+    }
+  
   for(y=vsy;y<ny;y++)
     memset(scrnbmp_new+y*(ZX_VID_FULLWIDTH/8),0xff,ZX_VID_FULLWIDTH/8);
 }
@@ -120,43 +118,8 @@ int nmipend=0,intpend=0,vsyncpend=0,vsynclen=0;
 int hsyncskip=0;
 int framewait=0;
 
-void ResetZ80(void)
-{
-  a=f=b=c=d=e=h=l=a1=f1=b1=c1=d1=e1=h1=l1=i=iff1=iff2=im=r=0;
-  ixoriy=new_ixoriy=0;
-  ix=iy=sp=pc=0;
-  tstates=radjust=0;
-  nextlinetime=linegap; 
 
-  if(autoload)
-  {
-    /* we load a snapshot, in effect. The memory was done by
-     * common.c, this does the registers.
-     */
-    static unsigned char bit1[9]={0xFF,0x80,0xFC,0x7F,0x00,0x80,0x00,0xFE,0xFF};
-    static unsigned char bit2[4]={0x76,0x06,0x00,0x3e};
-  
-    /* memory will already be zeroed at this point */
-    memcpy(mem+0x4000,bit1,9);
-    memcpy(mem+0x7ffc,bit2,4);
-    a=0x0B; f=0x85; b=0x00; c=0xFF;
-    d=0x43; e=0x99; h=0xC3; l=0x99;
-    a1=0xE2; f1=0xA1; b1=0x81; c1=0x02;
-    d1=0x00; e1=0x2B; h1=0x00; l1=0x00;
-    i=0x1E; iff1=iff2=0;
-    im=2;
-    r=0xDD; radjust=0xCA;
-    ix=0x281; iy=0x4000;
-    sp=0x7FFC;
-    pc=0x207;
 
-    /* finally, load. It'll reset (via reset81) if it fails. */
-    load_p(32768);
-
-    /* wait for a real frame, to avoid an annoying frame `jump'. */
-    framewait=1;
-  }
-}
 
 
 void ExecZ80(void)
@@ -172,26 +135,53 @@ void ExecZ80(void)
     new_ixoriy=0;
     intsample=1;
     op=fetch(pc&0x7fff);
+  
+    if (pc&0x8000 && !(op&64) && linestate==0) {
+      nrmvideo = i<0x20 || radjust==0xdf;
+      linestate = 1;
+      linex = 5;
+      if (liney<ZX_VID_MARGIN) liney=ZX_VID_MARGIN;
+    } else if (linestate>=1) {
+      if (op&64) {
+        linestate = 0;
+        linex = ZX_VID_FULLWIDTH/8;
+        if (ramsize>=4 && !zx80) {
+          liney++;
+          lineyi=1;
+        }
+      } else {
+        linestate++;
+        linex++;
+      }
+    }
+  
+    if (!nrmvideo) ulacharline = 0;
+  
     if((pc&0x8000) && !(op&64))
     {
       int x,y,v;
-    
+      
       /* do the ULA's char-generating stuff */
-      x=LINEX;
+      x=linex;
       y=liney;
+      /*    printf("ULA %3d,%3d = %02X\n",x,y,op);*/
       if(y>=0 && y<ZX_VID_FULLHEIGHT && x>=0 && x<ZX_VID_FULLWIDTH/8)
       {
         /* XXX I think this is what's needed for the `true hi-res'
          * stuff from the ULA's side, but the timing is messed up
          * at the moment so not worth it currently.
          */
-        v=mem[((i&0xfe)<<8)|((op&63)<<3)|ulacharline];
+        if (nrmvideo)
+          v=mem[((i&0xfe)<<8)|((op&63)<<3)|ulacharline];
+        else
+          v=mem[(i<<8)|(r&0x80)|(radjust&0x7f)];
+        //if(taguladisp) v^=128;
         scrnbmp_new[y*(ZX_VID_FULLWIDTH/8)+x]=((op&128)?~v:v);
       }
-    
-      op=0;	/* the CPU sees a nop */
+  
+      op=0;  /* the CPU sees a nop */
     }
-
+  
     pc++;
     radjust++;
   
@@ -282,7 +272,7 @@ void ExecZ80(void)
   
       if(!vsyncpend)
       {
-        liney++;
+        if (!lineyi) liney++;
         
         if(hsyncgen && !hsyncskip)
         {
@@ -394,3 +384,78 @@ void ExecZ80(void)
   }
 
 }
+
+void ResetZ80(void)
+{
+  a=f=b=c=d=e=h=l=a1=f1=b1=c1=d1=e1=h1=l1=i=iff1=iff2=im=r=0;
+  ixoriy=new_ixoriy=0;
+  ix=iy=sp=pc=0;
+  tstates=radjust=0;
+  nextlinetime=linegap; 
+  tstates=0;
+  frames=0;
+  liney=0;
+  vsy=0;
+  linestart=0;
+  vsync_toggle=0;
+  vsync_lasttoggle=0;
+
+   /* we load a snapshot, in effect.This does the registers.
+     */
+  if(autoload)
+  {
+    if (zx80) {
+      /* Registers (common values) */
+      a = 0x00; f = 0x44; b = 0x00; c = 0x00;
+      d = 0x07; e = 0xae; h = 0x40; l = 0x2a;
+      pc = 0x0283;
+      ix = 0x0000; iy = 0x4000; i = 0x0e; r = 0xdd;
+      a1 = 0x00; f1 = 0x00; b1 = 0x00; c1 = 0x21;
+      d1 = 0xd8; e1 = 0xf0; h1 = 0xd8; l1 = 0xf0;
+      iff1 = 0x00; iff2 = 0x00; im = 0x02;
+      radjust = 0x6a;
+      /* Machine Stack (common values) */
+      if (ramsize >= 16) {
+        sp = 0x8000 - 4;
+      } else {
+        sp = 0x4000 - 4 + ramsize * 1024;
+      }
+      mem[sp + 0] = 0x47;
+      mem[sp + 1] = 0x04;
+      mem[sp + 2] = 0xba;
+      mem[sp + 3] = 0x3f;
+      /* Now override if RAM configuration changes things
+       * (there's a possibility these changes are unimportant) */
+      if (ramsize == 16) {
+        mem[sp + 2] = 0x22;
+      }
+    } else {
+      static unsigned char bit1[9]={0xFF,0x80,0xFC,0x7F,0x00,0x80,0x00,0xFE,0xFF};
+      static unsigned char bit2[4]={0x76,0x06,0x00,0x3e};
+    
+      /* memory will already be zeroed at this point */
+      
+      memcpy(mem+0x4000,bit1,9);
+      memcpy(mem+0x7ffc,bit2,4);
+  
+      a=0x0B; f=0x85; b=0x00; c=0xFF;
+      d=0x43; e=0x99; h=0xC3; l=0x99;
+      a1=0xE2; f1=0xA1; b1=0x81; c1=0x02;
+      d1=0x00; e1=0x2B; h1=0x00; l1=0x00;
+      i=0x1E; iff1=iff2=0;
+      im=2;
+      r=0xDD; radjust=0xCA;
+      ix=0x281; iy=0x4000;
+      sp=0x7FFC;
+      pc=0x207;      
+    }
+    
+
+    /* finally, load. It'll reset (via reset81) if it fails. */
+    load_p(32768);
+
+    /* wait for a real frame, to avoid an annoying frame `jump'. */
+    framewait=1;
+  }
+}
+
