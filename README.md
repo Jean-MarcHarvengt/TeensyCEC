@@ -11,8 +11,8 @@ A collection of 80th game console emulators for the Teensy3.6 MCU
 # Teensy Console Emulators Collection
 4 game consoles are currently supported:
 Atari2600 (teensyvcs), Philips Videopac/Odyssey (teensyo2em), Colecovision (teensycolem) and NES (teensynes).<br>
-And 2 computer cores supported:
-Zx81 (teensy81) and Zx Spectrum (teensyspeccy)
+2 computer cores currently supported:
+Zx80/Zx81 (teensy81) and Zx Spectrum (teensyspeccy)
 
 All emulators support both ILI9341 TFT and VGA output using the uVGA library https://github.com/qix67/uVGA
 <br>
@@ -77,9 +77,10 @@ NES requires 240Mhz for better performances.
   - kempston joystick supported but on screen keyboard may not answer in some games
   - I2C custom keyboard support!
 - teensy81:
-  - .P format support
+  - .P, .81 and .80 format support (rename .56 for Zx81 hires game that requires 48k or more)
   - I2C custom keyboard support!
   - HIRES support
+  - Zx80 support
   - YM sound support
 
 
