@@ -38,7 +38,16 @@
 #define KEYBOARD_KEY_W       30
 #define KEYBOARD_HIT_COLOR   RGBVAL16(0xff,0x00,0x00)
 
-const unsigned short keysw[] = {
+const unsigned short keyswzx80[] = {
+  TAREA_XY,KEYBOARD_X,KEYBOARD_Y+16,
+  TAREA_WH,KEYBOARD_KEY_W,KEYBOARD_KEY_H-6,
+  TAREA_NEW_ROW,30,30,30,30,30,30,30,30,30,30,
+  TAREA_NEW_ROW,30,30,30,30,30,30,30,30,30,30,
+  TAREA_NEW_ROW,30,30,30,30,30,30,30,30,30,30,
+  TAREA_NEW_ROW,30,30,30,30,30,30,30,30,30,30,
+  TAREA_END};
+
+const unsigned short keyswzx81[] = {
   TAREA_XY,KEYBOARD_X,KEYBOARD_Y,
   TAREA_WH,KEYBOARD_KEY_W,KEYBOARD_KEY_H,
   TAREA_NEW_ROW,30,30,30,30,30,30,30,30,30,30,
@@ -46,7 +55,7 @@ const unsigned short keysw[] = {
   TAREA_NEW_ROW,30,30,30,30,30,30,30,30,30,30,
   TAREA_NEW_ROW,30,30,30,30,30,30,30,30,30,30,
   TAREA_END};
-   
+     
 const unsigned char keys[] = {
   30,31,32,33,34,35,36,37,38,39,
   20,26, 8,21,23,28,25,12,18,19,
@@ -123,6 +132,7 @@ extern void emu_sndPlayBuzz(int size, int val);
 extern void emu_sndInit();
 extern void emu_resetus(void);
 extern int emu_us(void);
+extern int emu_setKeymap(int index);
 
 
 #endif

@@ -43,23 +43,23 @@ void ZX_ReadFromFlash_SNA(Z80 *regs, const char * filename)
       regs->IY.B.h = snafile[16];
       regs->IX.B.l = snafile[17];
       regs->IX.B.h = snafile[18];
-//regs->IFF1
-//#define IFF_1       0x01       /* IFF1 flip-flop             */
+ //#define IFF_1       0x01       /* IFF1 flip-flop             */
 //#define IFF_IM1     0x02       /* 1: IM1 mode                */
 //#define IFF_IM2     0x04       /* 1: IM2 mode                */
 //#define IFF_2       0x08       /* IFF2 flip-flop             */
 //#define IFF_EI      0x20       /* 1: EI pending              */
 //#define IFF_HALT    0x80       /* 1: CPU HALTed              */
-      
-      //regs->R.W  = snafile[20];
+      regs->R = snafile[20]; //R.W
       regs->AF.B.l = snafile[21];
       regs->AF.B.h = snafile[22];
       regs->SP.B.l =snafile[23];
       regs->SP.B.h =snafile[24];
-      //regs->IFF1 = regs->IFF2 = (snafile[19]&0x04) >>2;
-      //regs->IM = snafile[25];
+      regs->IFF = 0;
+      regs->IFF |= (((snafile[19]&0x04) >>2)?IFF_1:0); //regs->IFF1 = regs->IFF2 = ...
+      regs->IFF |= (((snafile[19]&0x04) >>2)?IFF_2:0);
+      regs->IFF |= (snafile[25]<< 1); // regs->IM = snafile[25];
       //regs->BorderColor = snafile[26];
-      regs->IFF |= (snafile[25]<< 1);
+
       
 
       // load RAM from SNA

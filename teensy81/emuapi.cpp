@@ -5,7 +5,8 @@ extern "C" {
 }
 
 #include "ili9341_t3dma.h"
-#include "logo.h"
+#include "logozx80kbd.h"
+#include "logozx81kbd.h"
 #include "bmpjoy.h"
 #include "bmpvbar.h"
 #include "bmpvga.h"
@@ -21,7 +22,8 @@ static File file;
 static char romspath[64];
 static int16_t calMinX=-1,calMinY=-1,calMaxX=-1,calMaxY=-1;
 static bool i2cKeyboardPresent = false;
-
+static const uint16_t * logo = logozx81kbd;
+static const unsigned short * keysw = keyswzx81;
 
 #define CALIBRATION_FILE    "/cal.cfg"
 
@@ -866,9 +868,13 @@ void handleVirtualkeyboard() {
         else {         
             toggleVirtualkeyboard(true);           
         } 
-    }
-          
+    }        
 }
 
+
+int emu_setKeymap(int index) {
+  logo = logozx80kbd;
+  keysw = keyswzx80;  
+}
 
 
