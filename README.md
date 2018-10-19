@@ -46,8 +46,8 @@ NES requires 240Mhz for better performances.
   - "o2em" => for teenso2em, put your Videopac/Odysssey roms here (.bin)
   - "coleco" => for teensycolem, put your Colecovision roms here (.rom, including coleco.rom)
   - "nes" => for teensynes, put your .nes files here, onlt 32k games are supported (galaga,xevious,mario1...)
-  - "spec" => for teensyspeccy, put your ".z80" or ".sna" files here ( max 48K games so typically smaller z80 images)
-  - "z81" => for teensy81, put your ".p" files here.
+  - "spec" => for teensyspeccy, put your ".z80" or ".sna" files here into sub-dirs or not ( max 48K )
+  - "z81" => for teensy81, put your ".p", ".81"(, ".56") ".80" or ".o" files here, into sub-dirs or not ( max 56K )
   - "cal.cfg"  
 - insert the microSD in the teensy
 
