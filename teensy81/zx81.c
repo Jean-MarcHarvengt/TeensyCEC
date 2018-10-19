@@ -531,11 +531,21 @@ static int endsWith(const char * s, const char * suffix)
 
 void z81_Start(char * filename)
 {
+  char c;
   strncpy(tapename,filename,64);
-  if ( (endsWith(filename, ".80")) || (endsWith(filename, ".o")) )  {
-    autoload = 1;
+  if ( emu_FileOpen(tapename) ) {
+    int fsize = emu_FileRead(&c, 1);
+    if ( fsize == 0) { 
+      autoload = 0;
+      emu_printf("no autoload");
+    }
+    emu_FileClose();
+  }
+
+  if ( (endsWith(filename, ".80")) || (endsWith(filename, ".o")) || (endsWith(filename, ".O")))  {
     zx80=1;
     ramsize=48;
+    emu_setKeymap(0);    
   }
   else if (endsWith(filename, ".56") ) {
     ramsize = 56;

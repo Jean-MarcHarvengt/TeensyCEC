@@ -58,6 +58,7 @@ typedef struct
   unsigned int vol;
 } Channel;
 
+static bool ayMode=false;
 volatile bool playing = false;
 #if ALT_BUZZER
 #define BUZZBSIZE  0x1000
@@ -107,63 +108,66 @@ static void snd_Reset(void)
 }
 
 
-
-
 static void snd_Mixer(short *  stream, int len )
 {
   int i;
-  short v0,v1,v2,v3,v4,v5;
-  long s; 
-
-  v0=chan[0].vol;
-  v1=chan[1].vol;
-  v2=chan[2].vol;
-  v3=chan[3].vol;
-  v4=chan[4].vol;
-  v5=chan[5].vol;
-
+  long s;  
   len = len >> 1;  
+  if (ayMode) {
+    short v0=chan[0].vol;
+    short v1=chan[1].vol;
+    short v2=chan[2].vol;
+    short v3=chan[3].vol;
+    short v4=chan[4].vol;
+    short v5=chan[5].vol;
+    for (i=0;i<len;i++)
+    {
+      s =((v0*square[(chan[0].spos>>8)&0x3f])>>11);
+      s+=((v1*square[(chan[1].spos>>8)&0x3f])>>11);
+      s+=((v2*square[(chan[2].spos>>8)&0x3f])>>11);
+      s+=((v3*noise[(chan[3].spos>>8)&(NOISEBSIZE-1)])>>11);
+      s+=((v4*noise[(chan[4].spos>>8)&(NOISEBSIZE-1)])>>11);
+      s+=((v5*noise[(chan[5].spos>>8)&(NOISEBSIZE-1)])>>11);         
+      *stream++ = (short)(s);
+      *stream++ = (short)(s);
+      chan[0].spos += chan[0].sinc;
+      chan[1].spos += chan[1].sinc;
+      chan[2].spos += chan[2].sinc;
+      chan[3].spos += chan[3].sinc;  
+      chan[4].spos += chan[4].sinc;  
+      chan[5].spos += chan[5].sinc;  
+    }    
+  }
+  else {
 
-  for (i=0;i<len;i++)
-  {
-    s =((v0*square[(chan[0].spos>>8)&0x3f])>>11);
-    s+=((v1*square[(chan[1].spos>>8)&0x3f])>>11);
-    s+=((v2*square[(chan[2].spos>>8)&0x3f])>>11);
-    s+=((v3*noise[(chan[3].spos>>8)&(NOISEBSIZE-1)])>>11);
-    s+=((v4*noise[(chan[4].spos>>8)&(NOISEBSIZE-1)])>>11);
-    s+=((v5*noise[(chan[5].spos>>8)&(NOISEBSIZE-1)])>>11);
-#if ALT_BUZZER
-    if (cnt != 0) {
-      toggle=buzzer[spos]&1;
-      if (buzzer[spos] > 0) {
-        buzzer[spos] -= sinc;
-        buzzer[spos] &= 0xfffffffe; 
-        buzzer[spos] |= toggle;        
-      } else {
-        int t = buzzer[spos];
-        spos = (spos + 1)&(BUZZBSIZE-1);
-        buzzer[spos] -= t;
-        //toggle=(toggle?false:true);
-        cnt--;
+    for (i=0;i<len;i++)
+    {
+  #if ALT_BUZZER
+      if (cnt != 0) {
+        toggle=buzzer[spos]&1;
+        if (buzzer[spos] > 0) {
+          buzzer[spos] -= sinc;
+          buzzer[spos] &= 0xfffffffe; 
+          buzzer[spos] |= toggle;        
+        } else {
+          int t = buzzer[spos];
+          spos = (spos + 1)&(BUZZBSIZE-1);
+          buzzer[spos] -= t;
+          //toggle=(toggle?false:true);
+          cnt--;
+        }
+        s = ((!toggle)?32767:-32767);    
       }
-      s += (((!toggle)?32767:-32767)>>3);    
-    }
-#else
-    if (spos != wpos) {
-      s += (buzzer[spos]>>3);
-      spos = (spos + 1)&(BUZZBSIZE-1);
-    }
-#endif   
-    *stream++ = (short)(s);
-    *stream++ = (short)(s);
-    chan[0].spos += chan[0].sinc;
-    chan[1].spos += chan[1].sinc;
-    chan[2].spos += chan[2].sinc;
-    chan[3].spos += chan[3].sinc;  
-    chan[4].spos += chan[4].sinc;  
-    chan[5].spos += chan[5].sinc;  
-  }    
-
+  #else
+      if (spos != wpos) {
+        s = buzzer[spos];
+        spos = (spos + 1)&(BUZZBSIZE-1);
+      }
+  #endif   
+      *stream++ = (short)(s);
+      *stream++ = (short)(s); 
+    }      
+  }
 }
   
 void AudioPlaySystem::begin(void)
@@ -222,6 +226,7 @@ void AudioPlaySystem::update(void) {
 }
 
 void AudioPlaySystem::sound(int C, int F, int V) {
+  if ((F) || (V)) ayMode=true;
   if (C < 6) {
     chan[C].vol = V;
     chan[C].sinc = F>>1; 
@@ -232,9 +237,8 @@ void AudioPlaySystem::step(void) {
 }
 
 
-
 void AudioPlaySystem::buzz(int size, int val) {
-  if (playing) {
+  if ( (playing) && (!ayMode) ) {
 #if ALT_BUZZER
     if (val) 
       size |= 1;
