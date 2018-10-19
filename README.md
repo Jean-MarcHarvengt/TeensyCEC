@@ -1,5 +1,5 @@
 # TeensyCEC
-A collection of 80th game console emulators for the Teensy3.6 MCU
+A collection of 80th game Console Emulators and Computer for the Teensy3.6 MCU
 <p float="left">
   <img src="/images/full1.jpg" width="400" />
   <img src="/images/full2.jpg" width="400" />
