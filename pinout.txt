@@ -5,8 +5,8 @@ pinout Teensy 3.6 (2x24 pins)
             (NC)       00             Ang  (NC)
             (NC)       01             3.3v (NC)
   VGA Blue (OPT)       02           X 23   Key RESET
-            (NC)       03             22   VGA Hsync (OPT)
-            (NC)       04             21   VGA Red (OPT)
+   I2C CLK (OPT)       03             22   VGA Hsync (OPT)
+   I2C DAT (OPT)       04             21   VGA Red (OPT)
    VGA Red (OPT)       05             20   VGA Red (OPT)
  VGA Green (OPT)       06             19   JOY1 Left (OPT)
  VGA Green (OPT)       07             18   JOY1 Right (OPT)
@@ -34,5 +34,6 @@ The keys (all) are using internal pullup so just connect the other side to the G
 The Analog joypad also needs VCC and GND connections !
 The Touch part of the ILI: T_DIN,T_DO,T_CLK,T_CS (SPI) but also T_IRQ must be connected
 The Display part of the ILI: SDI,SDO,SCK,CS but also DC,VCC and GND must be connected
+The i2ckeyboard : I2C CLK, I2C DAT, VCC and GND
 
 Everything is powered ofver the USB connector of the Teensy!
