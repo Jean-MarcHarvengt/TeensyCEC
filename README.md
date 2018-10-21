@@ -40,6 +40,10 @@ NES requires 240Mhz for better performances.
 # Wiring
 - see pinout.txt file in the project
 
+# I2C keyboard for computers emulators (optional)
+- see pinout.txt file in i2ckeyboard sub-directory
+- the I2C keyboard is using a separate atmega328p MCU handling the keys matrix
+
 # Installation
 - Format the SD card as FAT32
 - extract the content of SD.zip in the root directory 
