@@ -11,10 +11,10 @@ A collection of 80th game Console Emulators and Computer for the Teensy3.6 MCU
 
 
 # Teensy Console Emulators Collection
-4 game consoles are currently supported:
-Atari2600 (teensyvcs), Philips Videopac/Odyssey (teensyo2em), Colecovision (teensycolem) and NES (teensynes).<br>
-2 computer cores:
-Zx80/Zx81 (teensy81) and Zx Spectrum (teensyspeccy)
+5 game consoles are currently supported:
+Atari2600 (teensyvcs), Philips Videopac/Odyssey (teensyo2em), Colecovision (teensycolem), NES (teensynes) and Atarti 5200 (teensy5200).<br>
+3 computer cores:
+Zx80/Zx81 (teensy81), Zx Spectrum (teensyspeccy) and Atari800 (teensy800)
 
 All emulators support both ILI9341 TFT and VGA output using the uVGA library https://github.com/qix67/uVGA
 <br>
@@ -49,6 +49,8 @@ NES requires 240Mhz for better performances.
 - extract the content of SD.zip in the root directory 
 - there must be a sub-directorie for each emulator and the default callibration file for the ILI9341 touch screen
   - "2600" => for teensyvcs, put your Atari 2600 roms here (.bin)
+  - "5200" => for teensy5200, put your Atari 5200 roms here (.bin)
+  - "800"  => for teensy800, put your Atari 800 cartridges here (.rom)  
   - "o2em" => for teenso2em, put your Videopac/Odysssey roms here (.bin)
   - "coleco" => for teensycolem, put your Colecovision roms here (.rom, including coleco.rom)
   - "nes" => for teensynes, put your .nes files here, onlt 32k games are supported (galaga,xevious,mario1...)
@@ -76,6 +78,9 @@ NES requires 240Mhz for better performances.
   - no sound
   - 32k roms only supported
   - needs a little bit of speedup but playable...
+- teensy5200:
+  - basic sound support
+  - 16 and 32k roms
 - teensyspeccy:
   - Z80 and SNA support
   - YM and preliminary buzz sound support
@@ -89,8 +94,11 @@ NES requires 240Mhz for better performances.
   - HIRES support for zx81
   - zx80 support
   - YM sound support for zx81
-
-
+- teensy800:
+  - .rom support (no floppy yet)
+  - I2C custom keyboard support!
+  - basic sound support
+  
 - general:
   - menu not perfect!
   - touch screen precision to be checked (not sure if calibration works for all)
@@ -115,6 +123,6 @@ NES requires 240Mhz for better performances.
 
 # Credits
 I mostly ported the emulators from existing projects, all the credit goes to the authors of
-colem, o2em , x2600, moarnes, mc-4u and sz81 projects!
+colem, o2em , x2600, moarnes, mc-4u, sz81, atari800 and jun52 projects!
 Thanks a lot also to Frank Boesing for his ILI DMA library from which I started from and his great Teensy64 project https://github.com/FrankBoesing/Teensy64
 
