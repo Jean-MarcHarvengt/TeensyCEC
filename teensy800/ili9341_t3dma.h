@@ -94,33 +94,11 @@
 
 #ifdef __cplusplus
 
-//#define SCREEN_DMA_MAX_SIZE 65536UL
 #define SCREEN_DMA_MAX_SIZE 0xD000
 #define SCREEN_DMA_NUM_SETTINGS (((uint32_t)((2 * ILI9341_TFTHEIGHT * ILI9341_TFTWIDTH) / SCREEN_DMA_MAX_SIZE))+1)
 
-typedef struct {
-	const unsigned char *index;
-	const unsigned char *unicode;
-	const unsigned char *data;
-	unsigned char version;
-	unsigned char reserved;
-	unsigned char index1_first;
-	unsigned char index1_last;
-	unsigned char index2_first;
-	unsigned char index2_last;
-	unsigned char bits_index;
-	unsigned char bits_width;
-	unsigned char bits_height;
-	unsigned char bits_xoffset;
-	unsigned char bits_yoffset;
-	unsigned char bits_delta;
-	unsigned char line_space;
-	unsigned char cap_height;
-} ILI9341_t3_font_t;
 
-extern uint32_t * screen32;
-
-class ILI9341_t3DMA : public Print
+class ILI9341_t3DMA
 {
   public:
   	ILI9341_t3DMA(uint8_t _CS, uint8_t _DC, uint8_t _RST = 255, uint8_t _MOSI=11, uint8_t _SCLK=13, uint8_t _MISO=12,  uint8_t touch_cs=38,  uint8_t touch_irq=37);
@@ -156,17 +134,10 @@ class ILI9341_t3DMA : public Print
 	  void drawPixel(int16_t x, int16_t y, uint16_t color);
 	  uint16_t getPixel(int16_t x, int16_t y);
 	
-
-	  size_t write(uint8_t c) { /*drawFontChar(c);*/return 1; }
-	
-  	
   protected:
     uint8_t _rst, _cs, _dc;
 	  uint8_t _miso, _mosi, _sclk;
     uint8_t _touch_irq, _touch_cs;
-	  const ILI9341_t3_font_t *font;	
-	  int16_t  cursor_x, cursor_y;
-	  uint16_t textcolor, textbgcolor;
     const uint16_t max_screen_width = ILI9341_TFTWIDTH-1;
     const uint16_t max_screen_height = ILI9341_TFTHEIGHT-1;	
 	  bool flipped=false;

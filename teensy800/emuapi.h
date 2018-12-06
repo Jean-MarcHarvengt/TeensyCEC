@@ -1,6 +1,8 @@
 #ifndef EMUAPI_H
 #define EMUAPI_H
 
+//#define INVX        1
+#define INVY        1
 #define HAS_SND     1
 #define CUSTOM_SND  1
 #define HAS_I2CKBD  1
@@ -76,21 +78,6 @@ const unsigned short i2ckeys[] = {
 #endif
 
 
-#define PIN_JOY1_BTN     30
-#define PIN_JOY1_1       16
-#define PIN_JOY1_2       17
-#define PIN_JOY1_3       18
-#define PIN_JOY1_4       19
-
-// Analog joystick for JOY2 and 5 extra buttons
-#define PIN_JOY2_A1X    A12
-#define PIN_JOY2_A2Y    A13
-#define PIN_JOY2_BTN    36
-#define PIN_KEY_USER1   35
-#define PIN_KEY_USER2   34
-#define PIN_KEY_USER3   33
-#define PIN_KEY_USER4   39
-#define PIN_KEY_ESCAPE  23
 
 #define MASK_JOY2_RIGHT 0x001
 #define MASK_JOY2_LEFT  0x002
@@ -110,7 +97,6 @@ extern void emu_printf(char * text);
 extern void emu_printi(int val);
 extern void * emu_Malloc(int size);
 extern void emu_Free(void * pt);
-extern void * emu_TmpMemory(void);
 
 extern int emu_FileOpen(char * filename);
 extern int emu_FileRead(char * buf, int size);
