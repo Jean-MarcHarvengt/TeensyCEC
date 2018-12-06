@@ -1,10 +1,13 @@
 extern "C" {
   #include "emuapi.h"
+  #include "iopins.h"  
 }
+
 
 #include "keyboard_osd.h"
 #include "ili9341_t3dma.h"
 #include <elapsedMillis.h>
+
 
 extern "C" {
 #include "atari800.h"
@@ -41,18 +44,6 @@ UVGA_STATIC_FRAME_BUFFER(uvga_fb);
 uint8_t * VGA_frame_buffer = uvga_fb;
 #endif
 
-
-#define SCK             13
-#define MISO            12
-#define MOSI            11
-#define TFT_TOUCH_CS    38
-#define TFT_TOUCH_INT   37
-#define TFT_DC          9
-#define TFT_CS          10
-#define TFT_RST         255  // 255 = unused, connected to 3.3V
-#define TFT_SCLK        SCK
-#define TFT_MOSI        MOSI
-#define TFT_MISO        MISO
 
 ILI9341_t3DMA tft = ILI9341_t3DMA(TFT_CS, TFT_DC, TFT_RST, TFT_MOSI, TFT_SCLK, TFT_MISO, TFT_TOUCH_CS, TFT_TOUCH_INT);
 static unsigned char  palette8[PALETTE_SIZE];

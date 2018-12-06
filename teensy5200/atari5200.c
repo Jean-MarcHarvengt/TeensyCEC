@@ -42,7 +42,7 @@ typedef struct
 
 
 #define POT_MAX    223
-#define POT_CENTRE (POT_MAX/2)
+#define POT_CENTRE 115
 #define POT_LEFT   (POT_CENTRE-100) //15
 #define POT_RIGHT  (POT_CENTRE+100) // 210
 
@@ -556,8 +556,8 @@ void at5_Step(void)
   else
       which->right = 0; 
 
-  which->analog_h = emu_ReadAnalogJoyX(0,223);
-  which->analog_v = emu_ReadAnalogJoyY(223,0);///8+POT_CENTRE;
+  which->analog_h = emu_ReadAnalogJoyX(0,230);
+  which->analog_v = emu_ReadAnalogJoyY(0,230);
   
   GTIA_Frame();
   ANTIC_Frame(1); 

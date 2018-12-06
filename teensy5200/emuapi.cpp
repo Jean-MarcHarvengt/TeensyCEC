@@ -2,6 +2,7 @@
 
 extern "C" {
   #include "emuapi.h"
+  #include "iopins.h"  
 }
 
 #include "ili9341_t3dma.h"
@@ -74,7 +75,7 @@ const unsigned short menutouchareas[] = {
     
   TAREA_END};
    
-const unsigned char menutouchactions[] = {
+const unsigned short menutouchactions[] = {
   MKEY_L1,MKEY_L2,MKEY_L3,MKEY_L4,MKEY_L5,MKEY_L6,MKEY_L7,MKEY_L8,MKEY_L9,
   MKEY_UP,MKEY_DOWN,ACTION_NONE,MKEY_JOY,
   MKEY_TFT,MKEY_VGA}; 
@@ -116,7 +117,7 @@ static int readNbFiles(void) {
   return totalFiles;  
 }
 
-static char captureTouchZone(const unsigned short * areas, const unsigned char * actions, int *rx, int *ry, int *rw, int * rh) {
+static char captureTouchZone(const unsigned short * areas, const unsigned short * actions, int *rx, int *ry, int *rw, int * rh) {
     uint16_t xt=0;
     uint16_t yt=0;
     uint16_t zt=0;
@@ -540,11 +541,6 @@ void emu_Free(void * pt)
   free(pt);
 }
 
-void * emu_TmpMemory(void)
-{
-  return (void*)tft.getFrameBuffer();
-}
-
 int emu_FileOpen(char * filename)
 {
   int retval = 0;
@@ -672,48 +668,49 @@ static boolean joySwapped = false;
 static uint16_t bLastState;
 static int xRef;
 static int yRef;
-const int range = 12;               // output range of X or Y movement
-const int threshold = range / 4;    // resting threshold
-const int center = range / 2;       // resting position value
 
-static int readAxis(int thisAxis, int max) {
-  //analogReadResolution(11);
-  // read the analog input:
-  int reading = analogRead(thisAxis);
-  //Serial.print(reading);
-  if(max<0) {
-    max = -max;
-    reading = max-reading;
-  }
 
-  // map the reading from the analog input range to the output range:
-  reading = map(reading, 0, max, 0, range);
-
-  // if the output reading is outside from the
-  // rest position threshold,  use it:
-  int distance = reading - center;
-
-  if (abs(distance) < threshold) {
-    distance = 0;
-  }
-
-  //Serial.print(",");
-  //Serial.println(distance);
-
-  // return the distance for this axis:
-  return distance;
+int emu_ReadAnalogJoyX(int min, int max) 
+{
+  int val = analogRead(PIN_JOY2_A1X);
+#if INVX
+  val = 4095 - val;
+#endif
+  val = val-xRef;
+  val = ((val*140)/100);
+  if ( (val > -512) && (val < 512) ) val = 0;
+  val = val+2048;
+  return (val*(max-min))/4096;
 }
+
+int emu_ReadAnalogJoyY(int min, int max) 
+{
+  int val = analogRead(PIN_JOY2_A2Y);
+#if INVY
+  val = 4095 - val;
+#endif
+  val = val-yRef;
+  val = ((val*120)/100);
+  if ( (val > -512) && (val < 512) ) val = 0;
+  //val = (val*(max-min))/4096;
+  val = val+2048;
+  //return val+(max-min)/2;
+  return (val*(max-min))/4096;
+}
+
 
 static uint16_t readAnalogJoystick(void)
 {
   uint16_t joysval = 0;
 
-  int xReading = readAxis(PIN_JOY2_A1X, xRef*2);
-  if (xReading > 0) joysval |= MASK_JOY2_LEFT;
-  else if (xReading < 0) joysval |= MASK_JOY2_RIGHT;
-  int yReading = readAxis(PIN_JOY2_A2Y, -yRef*2);
-  if (yReading < 0) joysval |= MASK_JOY2_UP;
-  else if (yReading > 0) joysval |= MASK_JOY2_DOWN;
+  int xReading = emu_ReadAnalogJoyX(0,256);
+  if (xReading > 128) joysval |= MASK_JOY2_LEFT;
+  else if (xReading < 128) joysval |= MASK_JOY2_RIGHT;
+  
+  int yReading = emu_ReadAnalogJoyY(0,256);
+  if (yReading < 128) joysval |= MASK_JOY2_UP;
+  else if (yReading > 128) joysval |= MASK_JOY2_DOWN;
+  
   joysval |= (digitalRead(PIN_JOY2_BTN) == HIGH ? 0 : MASK_JOY2_BTN);
 
   return (joysval);     
@@ -774,20 +771,10 @@ int emu_ReadKeys(void)
   if ( digitalRead(PIN_KEY_USER1) == LOW ) retval |= MASK_KEY_USER1;
   if ( digitalRead(PIN_KEY_USER2) == LOW ) retval |= MASK_KEY_USER2;
   if ( digitalRead(PIN_KEY_USER3) == LOW ) retval |= MASK_KEY_USER3;
+  if ( digitalRead(PIN_KEY_USER4) == LOW ) retval |= MASK_KEY_USER4;
 
   return (retval);
 }
-
-int emu_ReadAnalogJoyX(int min, int max) 
-{
-  return (map(analogRead(PIN_JOY2_A1X), 0, 1024, min, max));
-}
-
-int emu_ReadAnalogJoyY(int min, int max) 
-{
-  return (map(analogRead(PIN_JOY2_A2Y), 0, 1024, min, max));
-}
-
 
 int emu_ReadI2CKeyboard(void) {
   int retval=0;
@@ -841,8 +828,24 @@ void emu_InitJoysticks(void) {
   pinMode(PIN_KEY_USER4, INPUT_PULLUP);
   pinMode(PIN_KEY_ESCAPE, INPUT_PULLUP);
   pinMode(PIN_JOY2_BTN, INPUT_PULLUP);
-  xRef = analogRead(PIN_JOY2_A1X);
-  yRef = analogRead(PIN_JOY2_A2Y);  
+  analogReadResolution(12);
+  xRef=0; yRef=0;
+  for (int i=0; i<10; i++) {
+    xRef += analogRead(PIN_JOY2_A1X);
+    yRef += analogRead(PIN_JOY2_A2Y);  
+    delay(20);
+  }
+
+#if INVX
+  xRef = 4095 -xRef/10;
+#else
+  xRef /= 10;
+#endif
+#if INVY
+  yRef = 4095 -yRef/10;
+#else
+  yRef /= 10;
+#endif   
 }
 
 
