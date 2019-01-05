@@ -22,17 +22,14 @@
 #define XPT2046_MUX_Z2      0b100
 
 #ifdef DMA_FULL
-static DMAMEM uint16_t dmascreen[ILI9341_TFTHEIGHT*ILI9341_TFTWIDTH+ILI9341_VIDEOMEMSPARE];
-static uint16_t * screen=dmascreen;
+//static DMAMEM uint16_t dmascreen[ILI9341_TFTHEIGHT*ILI9341_TFTWIDTH+ILI9341_VIDEOMEMSPARE];
+static uint16_t * screen=NULL; //=dmascreen;
 #else
 static uint16_t * screen;
 #endif
 
-//uint16_t * screen16 = (uint16_t*)&screen[0][0];
-//uint32_t * screen32 = (uint32_t*)&screen[0][0];
-//const uint32_t * screen32e = (uint32_t*)&screen[0][0] + sizeof(screen) / 4;
-
-DMAChannel dmatx;
+static DMASetting dmasettings[SCREEN_DMA_NUM_SETTINGS];
+static DMAChannel dmatx;
 volatile uint8_t rstop = 0;
 volatile bool cancelled = false;
 volatile uint8_t ntransfer = 0;
@@ -77,6 +74,42 @@ static void dmaInterrupt() {
         rstop = 1;
     }
   }
+}
+
+static void setDmaStruct() {
+  const uint32_t bytesPerLine = ILI9341_TFTWIDTH * 2;
+  const uint32_t maxLines = (SCREEN_DMA_MAX_SIZE / bytesPerLine);
+  uint32_t i = 0, sum = 0, lines;
+  do {
+
+    //Source:
+    lines = min(maxLines, ILI9341_TFTHEIGHT - sum);
+    int32_t len = lines * bytesPerLine;
+    dmasettings[i].TCD->CSR = 0;
+    dmasettings[i].TCD->SADDR = &screen[sum*ILI9341_TFTWIDTH];
+
+    dmasettings[i].TCD->SOFF = 2;
+    dmasettings[i].TCD->ATTR_SRC = 1;
+    dmasettings[i].TCD->NBYTES = 2;
+    dmasettings[i].TCD->SLAST = -len;
+    dmasettings[i].TCD->BITER = len / 2;
+    dmasettings[i].TCD->CITER = len / 2;
+
+    //Destination:
+    dmasettings[i].TCD->DADDR = &SPI0_PUSHR;
+    dmasettings[i].TCD->DOFF = 0;
+    dmasettings[i].TCD->ATTR_DST = 1;
+    dmasettings[i].TCD->DLASTSGA = 0;
+
+    dmasettings[i].replaceSettingsOnCompletion(dmasettings[i + 1]);
+    dmasettings[i].interruptAtCompletion();
+    //dmasettings[i].disableOnCompletion();
+    sum += lines;
+  } while (++i < SCREEN_DMA_NUM_SETTINGS);
+
+  dmasettings[SCREEN_DMA_NUM_SETTINGS - 1].replaceSettingsOnCompletion(dmasettings[0]);
+  dmasettings[SCREEN_DMA_NUM_SETTINGS - 1].interruptAtCompletion(); 
+  //dmasettings[SCREEN_DMA_NUM_SETTINGS - 1].disableOnCompletion();
 }
 
 
@@ -185,39 +218,7 @@ void ILI9341_t3DMA::begin(void) {
   digitalWrite(_cs, 1);
   SPI.endTransaction();
 
-  const uint32_t bytesPerLine = ILI9341_TFTWIDTH * 2;
-  const uint32_t maxLines = (SCREEN_DMA_MAX_SIZE / bytesPerLine);
-  uint32_t i = 0, sum = 0, lines;
-  do {
-
-    //Source:
-    lines = min(maxLines, ILI9341_TFTHEIGHT - sum);
-    int32_t len = lines * bytesPerLine;
-    dmasettings[i].TCD->CSR = 0;
-    dmasettings[i].TCD->SADDR = &screen[sum*ILI9341_TFTWIDTH];
-
-    dmasettings[i].TCD->SOFF = 2;
-    dmasettings[i].TCD->ATTR_SRC = 1;
-    dmasettings[i].TCD->NBYTES = 2;
-    dmasettings[i].TCD->SLAST = -len;
-    dmasettings[i].TCD->BITER = len / 2;
-    dmasettings[i].TCD->CITER = len / 2;
-
-    //Destination:
-    dmasettings[i].TCD->DADDR = &SPI0_PUSHR;
-    dmasettings[i].TCD->DOFF = 0;
-    dmasettings[i].TCD->ATTR_DST = 1;
-    dmasettings[i].TCD->DLASTSGA = 0;
-
-    dmasettings[i].replaceSettingsOnCompletion(dmasettings[i + 1]);
-    dmasettings[i].interruptAtCompletion();
-    //dmasettings[i].disableOnCompletion();
-    sum += lines;
-  } while (++i < SCREEN_DMA_NUM_SETTINGS);
-
-  dmasettings[SCREEN_DMA_NUM_SETTINGS - 1].replaceSettingsOnCompletion(dmasettings[0]);
-  dmasettings[SCREEN_DMA_NUM_SETTINGS - 1].interruptAtCompletion(); 
-  //dmasettings[SCREEN_DMA_NUM_SETTINGS - 1].disableOnCompletion();
+  setDmaStruct();
 
   dmatx.attachInterrupt(dmaInterrupt);
    
@@ -233,7 +234,6 @@ void ILI9341_t3DMA::begin(void) {
 
 void ILI9341_t3DMA::flipscreen(bool flip)
 {
-
   SPI.beginTransaction(SPISettings(SPICLOCK, MSBFIRST, SPI_MODE0));
   digitalWrite(_dc, 0);
   digitalWrite(_cs, 0);
@@ -269,16 +269,19 @@ void ILI9341_t3DMA::start(void) {
 
 
 void ILI9341_t3DMA::refresh(void) {
-#ifdef DMA_FULL  
-  start();
-  fillScreen(RGBVAL16(0x00,0x00,0x00));
-  digitalWrite(_cs, 0);  
-  dmasettings[SCREEN_DMA_NUM_SETTINGS - 1].TCD->CSR &= ~DMA_TCD_CSR_DREQ; //disable "disableOnCompletion"
-  dmatx.enable();
-  ntransfer = 0;  
-  dmatx = dmasettings[0];
-  rstop = 0;
-#endif    
+#ifdef DMA_FULL
+  if (screen != NULL) {
+    setDmaStruct();
+    start();
+    fillScreen(RGBVAL16(0x00,0x00,0x00));
+    digitalWrite(_cs, 0);  
+    dmasettings[SCREEN_DMA_NUM_SETTINGS - 1].TCD->CSR &= ~DMA_TCD_CSR_DREQ; //disable "disableOnCompletion"
+    dmatx.enable();
+    ntransfer = 0;  
+    dmatx = dmasettings[0];
+    rstop = 0;     
+  }
+#endif      
 }
 
 
@@ -688,20 +691,12 @@ void ILI9341_t3DMA::writeScreen(int width, int height, int stride, uint8_t *buf,
   uint8_t *buffer=buf;
   uint8_t *src; 
 #ifdef DMA_FULL
+  if (screen != NULL) {
   uint16_t *dst = &screen[0];
-  int i,j;
-  if (width*2 <= ILI9341_TFTWIDTH) {
-    for (j=0; j<height; j++)
-    {
-      src=buffer;
-      for (i=0; i<width; i++)
+    int i,j;
+    if (width*2 <= ILI9341_TFTWIDTH) {
+      for (j=0; j<height; j++)
       {
-        uint16_t val = palette16[*src++];
-        *dst++ = val;
-        *dst++ = val;
-      }
-      dst += (ILI9341_TFTWIDTH-width*2);
-      if (height*2 <= ILI9341_TFTHEIGHT) {
         src=buffer;
         for (i=0; i<width; i++)
         {
@@ -709,23 +704,24 @@ void ILI9341_t3DMA::writeScreen(int width, int height, int stride, uint8_t *buf,
           *dst++ = val;
           *dst++ = val;
         }
-        dst += (ILI9341_TFTWIDTH-width*2);      
-      } 
-      buffer += stride;      
-    }
-  }
-  else if (width <= ILI9341_TFTWIDTH) {
-    dst += (ILI9341_TFTWIDTH-width)/2;
-    for (j=0; j<height; j++)
-    {
-      src=buffer;
-      for (i=0; i<width; i++)
-      {
-        uint16_t val = palette16[*src++];
-        *dst++ = val;
+        dst += (ILI9341_TFTWIDTH-width*2);
+        if (height*2 <= ILI9341_TFTHEIGHT) {
+          src=buffer;
+          for (i=0; i<width; i++)
+          {
+            uint16_t val = palette16[*src++];
+            *dst++ = val;
+            *dst++ = val;
+          }
+          dst += (ILI9341_TFTWIDTH-width*2);      
+        } 
+        buffer += stride;      
       }
-      dst += (ILI9341_TFTWIDTH-width);
-      if (height*2 <= ILI9341_TFTHEIGHT) {
+    }
+    else if (width <= ILI9341_TFTWIDTH) {
+      dst += (ILI9341_TFTWIDTH-width)/2;
+      for (j=0; j<height; j++)
+      {
         src=buffer;
         for (i=0; i<width; i++)
         {
@@ -733,11 +729,20 @@ void ILI9341_t3DMA::writeScreen(int width, int height, int stride, uint8_t *buf,
           *dst++ = val;
         }
         dst += (ILI9341_TFTWIDTH-width);
-      }      
-      buffer += stride;  
-    }
+        if (height*2 <= ILI9341_TFTHEIGHT) {
+          src=buffer;
+          for (i=0; i<width; i++)
+          {
+            uint16_t val = palette16[*src++];
+            *dst++ = val;
+          }
+          dst += (ILI9341_TFTWIDTH-width);
+        }      
+        buffer += stride;  
+      }
+    }    
   }
-#else
+  #else
   int i,j,k=0;
   if (width*2 <= ILI9341_TFTWIDTH) {
     if (height*2 <= ILI9341_TFTHEIGHT) {

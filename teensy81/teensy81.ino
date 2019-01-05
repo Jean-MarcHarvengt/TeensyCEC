@@ -1,5 +1,6 @@
 extern "C" {
   #include "emuapi.h"
+  #include "iopins.h"  
 }
 
 #include "keyboard_osd.h"
@@ -36,24 +37,12 @@ uVGA uvga;
 
 bool vgaMode = false;
 #ifdef DMA_FULL
-uint8_t * VGA_frame_buffer = (uint8_t *)ILI9341_t3DMA::getFrameBuffer();
+uint8_t * VGA_frame_buffer;
 #else
 UVGA_STATIC_FRAME_BUFFER(uvga_fb);
 uint8_t * VGA_frame_buffer = uvga_fb;
 #endif
 
-
-#define SCK             13
-#define MISO            12
-#define MOSI            11
-#define TFT_TOUCH_CS    38
-#define TFT_TOUCH_INT   37
-#define TFT_DC          9
-#define TFT_CS          10
-#define TFT_RST         255  // 255 = unused, connected to 3.3V
-#define TFT_SCLK        SCK
-#define TFT_MOSI        MOSI
-#define TFT_MISO        MISO
 
 ILI9341_t3DMA tft = ILI9341_t3DMA(TFT_CS, TFT_DC, TFT_RST, TFT_MOSI, TFT_SCLK, TFT_MISO, TFT_TOUCH_CS, TFT_TOUCH_INT);
 static unsigned char  palette8[PALETTE_SIZE];
@@ -206,20 +195,27 @@ void loop() {
     int action = handleMenu(bClick);
     char * filename = menuSelection();
     if (action == ACTION_RUNTFT) {
+      tft.setFrameBuffer((uint16_t *)malloc((ILI9341_TFTHEIGHT*ILI9341_TFTWIDTH)*sizeof(uint16_t)));     
+      Serial.print("TFT init: ");  
+      Serial.println(tft.getFrameBuffer()?"ok":"ko");       
       toggleMenu(false);
       vgaMode = false;   
-      tft.fillScreenNoDma( RGBVAL16(0x00,0x00,0x00) );
+      tft.fillScreenNoDma( RGBVAL16(0xff,0xff,0xff) );
       tft.refresh();
       emu_Init(filename);
     }
     else if (action == ACTION_RUNVGA)  {
       toggleMenu(false);
       vgaMode = true;
+      tft.setFrameBuffer((uint16_t *)malloc((UVGA_YRES*(UVGA_XRES+UVGA_XRES_EXTRA))*sizeof(uint8_t)));
+      VGA_frame_buffer = (uint8_t *)tft.getFrameBuffer();
+      uvga.set_static_framebuffer(VGA_frame_buffer);      
       emu_Init(filename);       
-      uvga.set_static_framebuffer(VGA_frame_buffer);
       int retvga = uvga.begin(&modeline);
-      Serial.println(retvga);      
-      uvga.clear(0x00);
+      Serial.println(retvga);
+      Serial.print("VGA init: ");  
+      Serial.println(retvga);              
+      uvga.clear(0xff);
       //tft.start();
       tft.fillScreenNoDma( RGBVAL16(0x00,0x00,0x00) );
       // In VGA mode, we show the keyboard on TFT

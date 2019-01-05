@@ -22,7 +22,7 @@ typedef unsigned short  word;
 #define AY_TYPE_ZONX		2
 
 
-extern unsigned char mem[65536];
+extern unsigned char * mem;
 extern unsigned char *memptr[64];
 extern int memattr[64];
 extern unsigned long tstates,tsmax;

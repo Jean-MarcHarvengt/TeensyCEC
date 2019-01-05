@@ -1,8 +1,11 @@
 #ifndef EMUAPI_H
 #define EMUAPI_H
 
+//#define INVX        1
+#define INVY        1
 #define HAS_SND     1
 #define HAS_I2CKBD  1
+//#define TIMER_REND  1
 
 // Title:     <                                        >
 #define TITLE "          ZX81/ZX80 Emulator            "
@@ -56,7 +59,7 @@ const unsigned short keyswzx81[] = {
   TAREA_NEW_ROW,30,30,30,30,30,30,30,30,30,30,
   TAREA_END};
      
-const unsigned char keys[] = {
+const unsigned short keys[] = {
   30,31,32,33,34,35,36,37,38,39,
   20,26, 8,21,23,28,25,12,18,19,
    4, 9, 7,22, 4,11,13,14,15,40,
@@ -74,22 +77,6 @@ const unsigned short i2ckeys[] = {
    
 #endif
 
-
-#define PIN_JOY1_BTN     30
-#define PIN_JOY1_1       16
-#define PIN_JOY1_2       17
-#define PIN_JOY1_3       18
-#define PIN_JOY1_4       19
-
-// Analog joystick for JOY2 and 5 extra buttons
-#define PIN_JOY2_A1X    A12
-#define PIN_JOY2_A2Y    A13
-#define PIN_JOY2_BTN    36
-#define PIN_KEY_USER1   35
-#define PIN_KEY_USER2   34
-#define PIN_KEY_USER3   33
-#define PIN_KEY_USER4   39
-#define PIN_KEY_ESCAPE  23
 
 #define MASK_JOY2_RIGHT 0x001
 #define MASK_JOY2_LEFT  0x002
@@ -112,8 +99,10 @@ extern void emu_Free(void * pt);
 
 extern int emu_FileOpen(char * filename);
 extern int emu_FileRead(char * buf, int size);
+extern unsigned char emu_FileGetc(void);
+extern int emu_FileSeek(int seek);
 extern void emu_FileClose(void);
-extern int emu_FileSize(void);
+extern int emu_FileSize(char * filename);
 extern int emu_LoadFile(char * filename, char * buf, int size);
 extern int emu_LoadFileSeek(char * filename, char * buf, int size, int seek);
 extern void emu_SetPaletteEntry(unsigned char r, unsigned char g, unsigned char b, int index);
@@ -126,14 +115,16 @@ extern int emu_SwapJoysticks(int statusOnly);
 extern unsigned short emu_DebounceLocalKeys(void);
 extern int emu_ReadKeys(void);
 extern int emu_GetPad(void);
+extern int emu_ReadAnalogJoyX(int min, int max);
+extern int emu_ReadAnalogJoyY(int min, int max);
 extern int emu_ReadI2CKeyboard(void);
 extern void emu_sndPlaySound(int chan, int volume, int freq);
 extern void emu_sndPlayBuzz(int size, int val);
 extern void emu_sndInit();
 extern void emu_resetus(void);
 extern int emu_us(void);
-extern int emu_setKeymap(int index);
 
+extern int emu_setKeymap(int index);
 
 #endif
 

@@ -291,7 +291,7 @@ static void load_CART(char * cartname)
       for (i = 0; i < 32768; i++) memory[0x4000 + i] = emu_FileGetc();
       // get crc32 from 32k data
       crc32 = calc_crc32(memory + 0x4000, 32768);
-      sprintf(logmsg, "32 Trying to load '%s', crc32=0x%08X\n", cartname, crc32);
+      sprintf(logmsg, "32 Trying to load '%s', crc32=0x%08X\n", cartname, (unsigned int)crc32);
       emu_printf(logmsg);
       break;
     case 16384: // 16k cart
@@ -300,7 +300,7 @@ static void load_CART(char * cartname)
 
       // get crc32 from 16k data
       crc32 = calc_crc32(memory + 0x4000, 16384);
-      sprintf(logmsg, "16 Trying to load '%s', crc32=0x%08X\n", cartname, crc32);
+      sprintf(logmsg, "16 Trying to load '%s', crc32=0x%08X\n", cartname, (unsigned int)crc32);
       emu_printf(logmsg);
 
       // get cart "signature"
@@ -400,7 +400,7 @@ static void load_CART(char * cartname)
         }
       // get crc32 from 8k data
       crc32 = calc_crc32(memory + 0x4000, 8192);
-      sprintf(logmsg, "8k cart load '%s', crc32=0x%08X\n", cartname, crc32);
+      sprintf(logmsg, "8k cart load '%s', crc32=0x%08X\n", cartname, (unsigned int)crc32);
       emu_printf(logmsg);
       break;
     default:    // oops!
@@ -567,7 +567,7 @@ void at5_Step(void)
   //for (i=0xC000; i< 0x10000; i++)
   //  if (memory[i] !=0) emu_printf("bug");  
 
-  framesdrawn = framesdrawn++;
+  framesdrawn = framesdrawn +1;
 }
 
 
