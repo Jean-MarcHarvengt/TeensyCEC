@@ -6,9 +6,10 @@
 #include "common.h"
 #include "AY8910.h"
 
+#define MEMORYRAM_SIZE 0x10000
 
 static AY8910 ay;
-byte mem[ 65536 ];
+byte * mem = 0; //mem[ 0x10000 ];
 unsigned char *memptr[64];
 int memattr[64];
 int unexpanded=0;
@@ -312,6 +313,7 @@ void load_p(int a)
   }
 */    
   emu_printf(tapename);
+  int size = emu_FileSize(tapename);  
   if ( !emu_FileOpen(tapename) ) {
     /* the partial snap will crash without a file, so reset */
     if(autoload)
@@ -321,7 +323,6 @@ void load_p(int a)
   }
 
   autoload=0;
-  int size = emu_FileSize();
   emu_FileRead(mem + (zx80?0x4000:0x4009), size);
   emu_FileClose();
 
@@ -368,7 +369,7 @@ static void initmem()
   {
     memset(mem+0x1000,0,0xf000);
   }
-else
+  else
   {
     memset(mem+0x2000,0,0xe000);
   }
@@ -480,6 +481,9 @@ void z81_Init(void)
   int J;
   for(J=0;J<2;J++)
     emu_SetPaletteEntry(Palette[J].R,Palette[J].G,Palette[J].B, J);
+
+  emu_printf("Allocating RAM");
+  if (mem == 0) mem = emu_Malloc(MEMORYRAM_SIZE);
   
   Reset8910(&ay,3500000,0);
   
@@ -542,6 +546,7 @@ void z81_Start(char * filename)
     emu_FileClose();
   }
 
+  emu_setKeymap(1); 
   if ( (endsWith(filename, ".80")) || (endsWith(filename, ".o")) || (endsWith(filename, ".O")))  {
     zx80=1;
     ramsize=48;

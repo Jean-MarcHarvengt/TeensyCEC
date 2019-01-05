@@ -55,6 +55,14 @@ const unsigned char keys[] = {
   8,9,10, 
   11,1,12};  
    
+#ifdef HAS_I2CKBD
+const unsigned short i2ckeys[] = {
+  0X0080,0X0008,0X0180,
+  0X0108,0X0280,0X0208,
+  0X0380,0X0308,0X0480,
+  0X0040,0X0408,0X0004};
+#endif
+   
 #endif
 
 

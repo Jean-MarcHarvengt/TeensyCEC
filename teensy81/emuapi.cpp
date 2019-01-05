@@ -2,6 +2,7 @@
 
 extern "C" {
   #include "emuapi.h"
+  #include "iopins.h"
 }
 
 #include "ili9341_t3dma.h"
@@ -22,8 +23,8 @@ static File file;
 static char romspath[64];
 static int16_t calMinX=-1,calMinY=-1,calMaxX=-1,calMaxY=-1;
 static bool i2cKeyboardPresent = false;
-static const uint16_t * logo = logozx81kbd;
-static const unsigned short * keysw = keyswzx81;
+static const uint16_t * logo = logozx80kbd;
+static const unsigned short * keysw = keyswzx80;
 
 #define CALIBRATION_FILE    "/cal.cfg"
 
@@ -76,7 +77,7 @@ const unsigned short menutouchareas[] = {
     
   TAREA_END};
    
-const unsigned char menutouchactions[] = {
+const unsigned short menutouchactions[] = {
   MKEY_L1,MKEY_L2,MKEY_L3,MKEY_L4,MKEY_L5,MKEY_L6,MKEY_L7,MKEY_L8,MKEY_L9,
   MKEY_UP,MKEY_DOWN,ACTION_NONE,MKEY_JOY,
   MKEY_TFT,MKEY_VGA}; 
@@ -118,7 +119,7 @@ static int readNbFiles(void) {
   return totalFiles;  
 }
 
-static char captureTouchZone(const unsigned short * areas, const unsigned char * actions, int *rx, int *ry, int *rw, int * rh) {
+static char captureTouchZone(const unsigned short * areas, const unsigned short * actions, int *rx, int *ry, int *rw, int * rh) {
     uint16_t xt=0;
     uint16_t yt=0;
     uint16_t zt=0;
@@ -129,6 +130,10 @@ static char captureTouchZone(const unsigned short * areas, const unsigned char *
         if (prev_zt == 0) {
             prev_zt =1;
             tft.readCal(&xt,&yt,&zt);
+            if (zt<1000) {
+              prev_zt=0; 
+              return ACTION_NONE;
+            }
             int i=0;
             int k=0;
             int y2=0, y1=0;
@@ -271,6 +276,9 @@ int handleCallibration(uint16_t bClick) {
     if (prev_zt == 0) {
       prev_zt = 1;
       tft.readRaw(&xt,&yt,&zt);
+      if (zt < 1000) {
+        return 0;
+      }
       switch (callibrationStep) 
       {
         case 0:
@@ -339,14 +347,17 @@ int handleMenu(uint16_t bClick)
 {
   int action = ACTION_NONE;
 
-  String newpath = String(romspath)+"/"+ String(selection);
-  File entry = sd.open(newpath.c_str());
+  char newpath[80];
+  strcpy(newpath, romspath);
+  strcat(newpath, "/");
+  strcat(newpath, selection);
+  File entry = sd.open(newpath);
 
   int rx=0,ry=0,rw=0,rh=0;
   char c = captureTouchZone(menutouchareas, menutouchactions, &rx,&ry,&rw,&rh);
   if ( ( (bClick & MASK_JOY2_BTN) || (bClick & MASK_KEY_USER1) )  && (entry.isDirectory()) ) {
       menuRedraw=true;
-      strcpy(romspath,newpath.c_str());
+      strcpy(romspath,newpath);
       curFile = 0;
       nbFiles = readNbFiles();     
   }
@@ -479,7 +490,7 @@ void emu_init(void)
   emu_InitJoysticks();
   readCallibration();
  
-  if (tft.isTouching()) {
+  if ((tft.isTouching()) || (emu_ReadKeys() & MASK_JOY2_BTN) ) {
     callibrationInit();
   } else  {
     toggleMenu(true);
@@ -537,8 +548,15 @@ void emu_Free(void * pt)
 int emu_FileOpen(char * filename)
 {
   int retval = 0;
-  String filepath = String(romspath) + String("/") + String(filename);
-  if (file.open(filepath.c_str(), O_READ)) {
+
+  char filepath[80];
+  strcpy(filepath, romspath);
+  strcat(filepath, "/");
+  strcat(filepath, filename);
+  emu_printf("FileOpen...");
+  emu_printf(filepath);
+    
+  if (file.open(filepath, O_READ)) {
     retval = 1;  
   }
   else {
@@ -556,24 +574,60 @@ int emu_FileRead(char * buf, int size)
   return (retval);     
 }
 
+unsigned char emu_FileGetc(void) {
+  unsigned char c;
+  int retval = file.read(&c, 1);
+  if (retval != 1) {
+    emu_printf("emu_FileGetc failed");
+  }  
+  return c; 
+}
+
+
 void emu_FileClose(void)
 {
   file.close();  
 }
 
-int emu_FileSize(void) 
+int emu_FileSize(char * filename) 
 {
-  return(file.fileSize());  
+  int filesize=0;
+  char filepath[80];
+  strcpy(filepath, romspath);
+  strcat(filepath, "/");
+  strcat(filepath, filename);
+  emu_printf("FileSize...");
+  emu_printf(filepath);
+
+  if (file.open(filepath, O_READ)) 
+  {
+    emu_printf("filesize is...");
+    filesize = file.fileSize(); 
+    emu_printf(filesize);
+    file.close();    
+  }
+ 
+  return(filesize);    
+}
+
+int emu_FileSeek(int seek) 
+{
+  file.seek(seek);
+  return (seek);
 }
 
 int emu_LoadFile(char * filename, char * buf, int size)
 {
   int filesize = 0;
     
-  emu_printf("Loading ");
-  emu_printf(filename);
-  String filepath = String(romspath) + String("/") + String(filename);
-  if (file.open(filepath.c_str(), O_READ)) 
+  char filepath[80];
+  strcpy(filepath, romspath);
+  strcat(filepath, "/");
+  strcat(filepath, filename);
+  emu_printf("LoadFile...");
+  emu_printf(filepath);
+  
+  if (file.open(filepath, O_READ)) 
   {
     filesize = file.fileSize(); 
     emu_printf(filesize);
@@ -593,10 +647,14 @@ int emu_LoadFileSeek(char * filename, char * buf, int size, int seek)
 {
   int filesize = 0;
     
-  //emu_printf("Loading ");
-  emu_printf(filename);
-  String filepath = String(romspath) + String("/") + String(filename);
-  if (file.open(filepath.c_str(), O_READ)) 
+  char filepath[80];
+  strcpy(filepath, romspath);
+  strcat(filepath, "/");
+  strcat(filepath, filename);
+  emu_printf("LoadFileSeek...");
+  emu_printf(filepath);
+  
+  if (file.open(filepath, O_READ)) 
   {
     file.seek(seek);
     emu_printf(size);
@@ -614,48 +672,49 @@ static boolean joySwapped = false;
 static uint16_t bLastState;
 static int xRef;
 static int yRef;
-const int range = 12;               // output range of X or Y movement
-const int threshold = range / 4;    // resting threshold
-const int center = range / 2;       // resting position value
 
-static int readAxis(int thisAxis, int max) {
-  //analogReadResolution(11);
-  // read the analog input:
-  int reading = analogRead(thisAxis);
-  //Serial.print(reading);
-  if(max<0) {
-    max = -max;
-    reading = max-reading;
-  }
 
-  // map the reading from the analog input range to the output range:
-  reading = map(reading, 0, max, 0, range);
-
-  // if the output reading is outside from the
-  // rest position threshold,  use it:
-  int distance = reading - center;
-
-  if (abs(distance) < threshold) {
-    distance = 0;
-  }
-
-  //Serial.print(",");
-  //Serial.println(distance);
-
-  // return the distance for this axis:
-  return distance;
+int emu_ReadAnalogJoyX(int min, int max) 
+{
+  int val = analogRead(PIN_JOY2_A1X);
+#if INVX
+  val = 4095 - val;
+#endif
+  val = val-xRef;
+  val = ((val*140)/100);
+  if ( (val > -512) && (val < 512) ) val = 0;
+  val = val+2048;
+  return (val*(max-min))/4096;
 }
+
+int emu_ReadAnalogJoyY(int min, int max) 
+{
+  int val = analogRead(PIN_JOY2_A2Y);
+#if INVY
+  val = 4095 - val;
+#endif
+  val = val-yRef;
+  val = ((val*120)/100);
+  if ( (val > -512) && (val < 512) ) val = 0;
+  //val = (val*(max-min))/4096;
+  val = val+2048;
+  //return val+(max-min)/2;
+  return (val*(max-min))/4096;
+}
+
 
 static uint16_t readAnalogJoystick(void)
 {
   uint16_t joysval = 0;
 
-  int xReading = readAxis(PIN_JOY2_A1X, xRef*2);
-  if (xReading > 0) joysval |= MASK_JOY2_LEFT;
-  else if (xReading < 0) joysval |= MASK_JOY2_RIGHT;
-  int yReading = readAxis(PIN_JOY2_A2Y, -yRef*2);
-  if (yReading < 0) joysval |= MASK_JOY2_UP;
-  else if (yReading > 0) joysval |= MASK_JOY2_DOWN;
+  int xReading = emu_ReadAnalogJoyX(0,256);
+  if (xReading > 128) joysval |= MASK_JOY2_LEFT;
+  else if (xReading < 128) joysval |= MASK_JOY2_RIGHT;
+  
+  int yReading = emu_ReadAnalogJoyY(0,256);
+  if (yReading < 128) joysval |= MASK_JOY2_UP;
+  else if (yReading > 128) joysval |= MASK_JOY2_DOWN;
+  
   joysval |= (digitalRead(PIN_JOY2_BTN) == HIGH ? 0 : MASK_JOY2_BTN);
 
   return (joysval);     
@@ -716,6 +775,7 @@ int emu_ReadKeys(void)
   if ( digitalRead(PIN_KEY_USER1) == LOW ) retval |= MASK_KEY_USER1;
   if ( digitalRead(PIN_KEY_USER2) == LOW ) retval |= MASK_KEY_USER2;
   if ( digitalRead(PIN_KEY_USER3) == LOW ) retval |= MASK_KEY_USER3;
+  if ( digitalRead(PIN_KEY_USER4) == LOW ) retval |= MASK_KEY_USER4;
 
   return (retval);
 }
@@ -773,8 +833,24 @@ void emu_InitJoysticks(void) {
   pinMode(PIN_KEY_USER4, INPUT_PULLUP);
   pinMode(PIN_KEY_ESCAPE, INPUT_PULLUP);
   pinMode(PIN_JOY2_BTN, INPUT_PULLUP);
-  xRef = analogRead(PIN_JOY2_A1X);
-  yRef = analogRead(PIN_JOY2_A2Y);  
+  analogReadResolution(12);
+  xRef=0; yRef=0;
+  for (int i=0; i<10; i++) {
+    xRef += analogRead(PIN_JOY2_A1X);
+    yRef += analogRead(PIN_JOY2_A2Y);  
+    delay(20);
+  }
+
+#if INVX
+  xRef = 4095 -xRef/10;
+#else
+  xRef /= 10;
+#endif
+#if INVY
+  yRef = 4095 -yRef/10;
+#else
+  yRef /= 10;
+#endif   
 }
 
 
@@ -824,27 +900,28 @@ void toggleVirtualkeyboard(bool keepOn) {
     }   
 }
 
-
+ 
 void handleVirtualkeyboard() {
+  int rx=0,ry=0,rw=0,rh=0;
+
     if (keyPressCount == 0) {
       keypadval = 0;      
     } else {
       keyPressCount--;
     }
 
-    if ( (!virtualkeyboardIsActive()) && (tft.isTouching()) ) {
+    if ( (!virtualkeyboardIsActive()) && (tft.isTouching()) && (!keyPressCount) ) {
         toggleVirtualkeyboard(false);
         return;
     }
     
-    int rx=0,ry=0,rw=0,rh=0;
-    if ( (vkbKeepOn) || (virtualkeyboardIsActive())  ) {
+    if ( ( (vkbKeepOn) || (virtualkeyboardIsActive())  )  ) {
         char c = captureTouchZone(keysw, keys, &rx,&ry,&rw,&rh);
         if (c) {
             tft.drawRectNoDma( rx,ry,rw,rh, KEYBOARD_HIT_COLOR );
             if ( (c >=1) && (c <= ACTION_MAXKBDVAL) ) {
               keypadval = c;
-              keyPressCount = 5;
+              keyPressCount = 10;
               delay(50);
               vkeyRefresh = true;
               exitVkbd = true;
@@ -868,13 +945,18 @@ void handleVirtualkeyboard() {
         else {         
             toggleVirtualkeyboard(true);           
         } 
-    }        
+    }
 }
 
-
 int emu_setKeymap(int index) {
-  logo = logozx80kbd;
-  keysw = keyswzx80;  
+  if (index) {
+    logo = logozx81kbd;
+    keysw = keyswzx81;      
+  }
+  else {
+    logo = logozx80kbd;
+    keysw = keyswzx80;  
+  }
 }
 
 
