@@ -12,14 +12,13 @@ A collection of 80th game Console Emulators and Computer for the Teensy3.6 MCU
 
 # Teensy Console Emulators Collection
 5 game consoles are currently supported:
-Atari2600 (teensyvcs), Philips Videopac/Odyssey (teensyo2em), Colecovision (teensycolem), NES (teensynes) and Atarti 5200 (teensy5200).<br>
+Atari2600 (teensyvcs), Philips Videopac/Odyssey (teensyo2em), Colecovision (teensycolem), NES (teensynofrendo/teensynes) and Atarti 5200 (teensy5200).<br>
 3 computer cores:
 Zx80/Zx81 (teensy81), Zx Spectrum (teensyspeccy) and Atari800 (teensy800)
 
 All emulators support both ILI9341 TFT and VGA output using the uVGA library https://github.com/qix67/uVGA
 <br>
-Can be compiled at 144MHz,180MHz and 240 MHz (180MHz is best for all!), only
-NES requires 240Mhz for better performances.
+Can be compiled at 144MHz,180MHz and 240 MHz (180MHz is best for all!)
 
 
 # Minimalrequirements:
@@ -53,7 +52,7 @@ NES requires 240Mhz for better performances.
   - "800"  => for teensy800, put your Atari 800 cartridges here (.rom)  
   - "o2em" => for teenso2em, put your Videopac/Odysssey roms here (.bin)
   - "coleco" => for teensycolem, put your Colecovision roms here (.rom, including coleco.rom)
-  - "nes" => for teensynes, put your .nes files here, onlt 32k games are supported (galaga,xevious,mario1...)
+  - "nes" => for teensynofrendo/teensynes, put your .nes files here, onlt 32k games are supported (galaga,xevious,mario1...)
   - "spec" => for teensyspeccy, put your ".z80" or ".sna" files here into sub-dirs or not ( max 48K )
   - "z81" => for teensy81, put your ".p", ".81"(, ".56") ".80" or ".o" files here, into sub-dirs or not ( max 56K )
   - "cal.cfg"  
@@ -74,6 +73,11 @@ NES requires 240Mhz for better performances.
 - teensyo2em:
   - no sound
   - only videopac G7000 games supported (due to ram constraint)
+- teensynofrendo:
+  - sound
+  - up to 48k roms, not more!
+  - Full speed
+  - Issue with games above 32k for VGA output
 - teensynes:
   - no sound
   - 32k roms only supported
@@ -123,6 +127,6 @@ NES requires 240Mhz for better performances.
 
 # Credits
 I mostly ported the emulators from existing projects, all the credit goes to the authors of
-colem, o2em , x2600, moarnes, mc-4u, sz81, atari800 and jun52 projects!
+colem, o2em , x2600, moarnes, mc-4u, sz81, atari800,jun52 qnd nofrendo projects!
 Thanks a lot also to Frank Boesing for his ILI DMA library from which I started from and his great Teensy64 project https://github.com/FrankBoesing/Teensy64
 
