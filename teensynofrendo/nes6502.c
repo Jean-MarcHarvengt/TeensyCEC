@@ -26,7 +26,7 @@
 
 #include "noftypes.h"
 #include "nes6502.h"
-#include "dis6502.h"
+//#include "dis6502.h"
 
 //#define  NES6502_DISASM
 

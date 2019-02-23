@@ -1132,7 +1132,7 @@ static void draw_sprite(bitmap_t *bmp, int x, int y, uint8 tile_num, uint8 attri
 
       data_ptr++;
       vid += bmp->pitch;
-   }
+   }  
 }
 
 void ppu_dumpoam(bitmap_t *bmp, int x_loc, int y_loc)

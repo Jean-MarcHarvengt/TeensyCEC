@@ -65,24 +65,10 @@ static bitmap_t *_make_bitmap(uint8 *data_addr, bool hw, int width,
    /* we want to make some 32-bit aligned adjustment
    ** if we haven't been given a hardware bitmap
    */
-/*
-   if (false == bitmap->hardware)
-   {
-      bitmap->pitch = (bitmap->pitch + 3) & ~3;
-      bitmap->line[0] = (uint8 *) (((uint32) bitmap->data + overdraw + 3) & ~3);
-   }
-   else
-   { 
-      bitmap->line[0] = bitmap->data + overdraw;
-   }
-  for (i = 1; i < height; i++)
-      bitmap->line[i] = bitmap->line[i - 1] + bitmap->pitch;
-*/
-
    //printf("setting up bitmap %d\n",(int)bitmap);
-   //for (i = 0; i < height; i++) {
-   //   bitmap->line[i] = emu_LineBuffer(i);
-   //}      
+   for (i = 0; i < height; i++) {
+      bitmap->line[i] = emu_LineBuffer(i);
+   }      
 
    return bitmap;
 }

@@ -179,7 +179,7 @@ void emu_DrawVsync(void)
   skip += 1;
   skip &= VID_FRAME_SKIP;
   if (!vgaMode) {
-    while (vbl==vb) {};
+    //while (vbl==vb) {};
   }
   else {
     //Serial.println("r");

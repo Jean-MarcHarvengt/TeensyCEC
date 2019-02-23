@@ -26,7 +26,6 @@
 
 char configfilename[]="na";
 char romname[64];
-char* romdata=NULL;
 
 /* This is os-specific part of main() */
 int osd_main(int argc, char *argv[])
@@ -242,13 +241,12 @@ int osd_installtimer(int frequency, void *func, int funcsize, void *counter, int
    return 0;
 }
 
-
+char* romdata=NULL;
 
 char *osd_getromdata() {
 
     return (char*)romdata;
 }
-
 
 
 
